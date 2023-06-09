@@ -9,6 +9,10 @@ export const GatewayPassthrough = new Capability({
 
 // Use the 'When' function to create a new Capability Action
 const { When } = GatewayPassthrough;
+let gateway: string = '';
+let host: string = '';
+let ns: string = '';
+let isPassthrough: boolean = false;
 
 // How do we register an existing CRD(VirtualService) so we don't have to polute or module?
   class VirtualServiceKind  extends a.GenericKind {
@@ -1338,9 +1342,31 @@ We still need to determine if the passthrough gateway is intended for the admin 
 
   When(VirtualServiceKind )
     .IsCreated()
-    .WithName("example-2")
     .Then(async vs => {
         vs.SetLabel("blah","blah")
- //       vs.Raw.spec.tls[0].match[0].sniHosts
+        isPassthrough = false; 
+
+
+        if (vs.Raw.spec.tls){
+           if (vs.Raw.spec.tls[0].match[0].sniHosts && vs.Raw.spec.tls[0].match[0].sniHosts.length > 0) {
+
+              isPassthrough = true;
+              host = vs.Raw.spec.tls[0].match[0].sniHosts[0];
+              ns = vs.Raw.metadata.namespace
+
+              if( vs.Raw.spec.gateways && vs.Raw.spec.gateways.length > 0){
+                 gateway = vs.Raw.spec.gateways[0];
+              }
+            } else {
+              console.log("sniHosts is empty");
+          }
+        }
+//        let domainX: string =   vs.Raw.spec.tls[0].match[0].sniHosts[0].
+     console.log("host:" + host);
+     console.log("gateway:" + gateway);
+     console.log("namespace:" + ns);
+     console.log("isPassthrough:" + isPassthrough);
 
      });
+      
+//console.log("domain: " + domain)
