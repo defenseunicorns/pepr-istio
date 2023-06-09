@@ -4,7 +4,6 @@ import {
     CustomObjectsApi,
     KubeConfig,
     V1Ingress,
-    V1ObjectMeta,
     NetworkingV1Api,
   } from "@kubernetes/client-node";
   

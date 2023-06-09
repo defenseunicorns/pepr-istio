@@ -1,10 +1,6 @@
 import {
   Capability,
-  PeprRequest,
-  RegisterKind,
   a,
-  fetch,
-  fetchStatus,
 } from "pepr";
 
 import { K8sAPI } from "./vsing";
