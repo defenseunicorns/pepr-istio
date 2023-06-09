@@ -14,18 +14,31 @@ const { When } = Istio;
 // When(a.<Kind>).Is<Event>().Then(change => change.<changes>
 When(a.Service)
   .IsCreated()
-  .Then(svc => svc.SetLabel("pepr", "hi-istio"));
+  .Then(svc => {
+    console.log("Service created:", svc);
 
-// convert ingress to virtual service
+  });
+
+When(a.Service)
+
+
+// Ingress may not be the correct entrypoint for this, but for now it is ok! 
 When(a.Ingress)
   .IsCreatedOrUpdated()
-  .InNamespace("pepr-demo")
+  .InNamespace('podinfo')
   .Then(async ing => {
-    if (ing.Raw.spec.ingressClassName == "pepr-demo") {
+    const ingressClassName = ing.Raw.spec.ingressClassName;
+    if (ingressClassName .startsWith('pepr-')) {
       const k8s = new K8sAPI();
 
+      const gatewayName = ingressClassName.split('-')[1];
+
+      await k8s.labelNamespace(ing.Raw.metadata.namespace, {
+        "istio-injection": "enabled",
+      });
+
       try {
-        await k8s.createOrUpdateVirtualService(ing.Raw);
+        await k8s.createOrUpdateVirtualService(ing.Raw, gatewayName);
       } catch (e) {
         console.error("Failed to create or update VirtualService:", e);
       }

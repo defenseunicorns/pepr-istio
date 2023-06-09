@@ -62,27 +62,72 @@ import {
       virtualService.validate();
       return virtualService;
     }
-  
-  
+
     async createOrUpdateVirtualService(
-      ingress: V1Ingress
+      ingress: V1Ingress,
+      gateway: string
     ) {
-  
-      const gateway = "istio-system/public"; // Replace with your Istio Gateway
+
       const virtualService = this.ingressToVirtualService(ingress, gateway);
   
       try {
+
+        // ON MONDAY, lets continue to create a way to PATCH a virtual service with pepr's fast-json-patch ability
         await this.k8sCustomObjectsApi.createNamespacedCustomObject(
-          "networking.istio.io",
-          "v1beta1",
+          // is there a better way to do this? 
+          VirtualService.apiVersion.split("/")[0],
+          VirtualService.apiVersion.split("/")[1],
           virtualService.metadata.namespace,
-          "virtualservices",
+          VirtualService.kind.toLocaleLowerCase() + "s",
           virtualService
         );
+        
       } catch (e) {
+        if (e.response.body.code === 409) {
+          const existingVs = await this.k8sCustomObjectsApi.getNamespacedCustomObject(
+            VirtualService.apiVersion.split("/")[0],
+            VirtualService.apiVersion.split("/")[1],
+            virtualService.metadata.namespace,
+            VirtualService.kind.toLocaleLowerCase() + "s",
+            virtualService.metadata.name
+          );
+
+          const temp = new VirtualService(existingVs.body);
+          virtualService.metadata = temp.metadata;
+          
+          // create a way to patch the virtual service instead of replacing it
+          temp.spec = virtualService.spec;
+          
+          
+          
+
+        } else {
+          console.error(`Failed to replace the custom object: ${e.body.message}`);
+        }
           console.log(e);
           console.log(e.response.body.message)
           throw e;
         }
       }
+
+    // store for notes, delete later: istio-injection=disabled 
+    async labelNamespace(namespace: string, labels: {[key: string]: string}) {
+      const patch = Object.keys(labels).map((key) => ({
+          op: "add",
+          path: `/metadata/labels/${key}`,
+          value: labels[key],
+      }));
+  
+      await this.k8sApi.patchNamespace(
+          namespace,
+          patch,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { headers: { "Content-Type": "application/json-patch+json" } }
+      );
+  }
+          
   }
