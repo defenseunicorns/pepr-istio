@@ -4,8 +4,7 @@ import {
     CustomObjectsApi,
     KubeConfig,
     V1Ingress,
-    NetworkingV1Api,
-    PatchUtils
+    NetworkingV1Api
   } from "@kubernetes/client-node";
 
 /*
@@ -102,26 +101,6 @@ import {
 
         const temp = new VirtualService(existingVs.body);
 
-        // calculate patch between existing and new virtual service
-        const patch = jsonpatch.compare(temp, virtualService);
-
-        // apply the patch to the existing virtual service
-        PeprModule.applyPatch(temp, patch);
-
-
-        // replace the virtual service with the patched version
-        await this.k8sCustomObjectsApi.patchNamespacedCustomObject(
-            VirtualService.apiVersion.split("/")[0],
-            VirtualService.apiVersion.split("/")[1],
-            temp.metadata.namespace,
-            VirtualService.kind.toLocaleLowerCase() + "s",
-            temp.metadata.name,
-            patch,
-            undefined,
-            undefined,
-            undefined,
-            { headers: { "Content-Type": "application/json-patch+json" } }
-        );
 
         } else {
           console.error(`Failed to replace the custom object: ${e.body.message}`);
