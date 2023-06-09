@@ -16,13 +16,10 @@ When(a.Service)
   .IsCreated()
   .Then(svc => {
     console.log("Service created:", svc);
-
   });
 
-When(a.Service)
+// Ingress may not be the correct entrypoint for this, but for now it is ok!
 
-
-// Ingress may not be the correct entrypoint for this, but for now it is ok! 
 When(a.Ingress)
   .IsCreatedOrUpdated()
   .InNamespace('podinfo')
