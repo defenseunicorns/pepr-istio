@@ -1,0 +1,17 @@
+.adr-dir
+.dockerignore
+.eslintrc.json
+.github
+.images
+.prettierrc
+.vscode
+adr
+CODEOWNERS
+Dockerfile
+insecure*
+pepr.ts
+*.test.*
+hello-pepr*
+*.tgz
+dist/pepr*
+dist/zarf.yaml

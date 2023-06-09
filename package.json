@@ -1,0 +1,38 @@
+{
+  "name": "@pepr/istio",
+  "license": "Apache-2.0",
+  "repository": "defenseunicorns/pepr-istio",
+  "version": "0.0.1",
+  "description": "This capability supports automation related to the Istio Service Mesh",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "pepr",
+    "k8s",
+    "policy-engine",
+    "pepr-module",
+    "security",
+    "istio",
+    "service-mesh"
+  ],
+  "pepr": {
+    "name": "Istio",
+    "uuid": "6fe3afc1-3555-5ee3-9728-fcdfad713f6e",
+    "onError": "audit",
+    "alwaysIgnore": {
+      "namespaces": [],
+      "labels": []
+    }
+  },
+  "scripts": {
+    "build": "rm -fr dist && pepr build -e index.ts",
+    "k3d-setup": "k3d cluster delete pepr-dev && k3d cluster create pepr-dev --k3s-arg '--debug@server:0'"
+  },
+  "dependencies": {
+    "pepr": "0.7.0"
+  },
+  "devDependencies": {
+    "typescript": "5.0.4"
+  }
+}
