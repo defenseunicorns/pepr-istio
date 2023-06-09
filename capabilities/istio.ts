@@ -5,7 +5,7 @@ import {
   a,
   fetch,
   fetchStatus,
-} from "istio";
+} from "pepr";
 
 import { K8sAPI } from "./vsing";
 

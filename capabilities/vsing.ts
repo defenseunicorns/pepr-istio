@@ -8,7 +8,7 @@ import {
     NetworkingV1Api,
   } from "@kubernetes/client-node";
   
-  import { fetchStatus } from "istio";
+  import { fetchStatus } from "pepr";
   import { VirtualService } from "@kubernetes-models/istio/networking.istio.io/v1beta1";
   
   export class K8sAPI {
