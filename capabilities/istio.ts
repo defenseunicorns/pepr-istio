@@ -1,7 +1,4 @@
-import {
-  Capability,
-  a,
-} from "pepr";
+import { Capability, a } from "pepr";
 
 import { K8sAPI } from "./vsing";
 
@@ -19,18 +16,18 @@ When(a.Service)
   .IsCreated()
   .Then(svc => svc.SetLabel("pepr", "hi-istio"));
 
-// convert ingress to virtual service 
+// convert ingress to virtual service
 When(a.Ingress)
-.IsCreatedOrUpdated()
-.InNamespace('pepr-demo')
-.Then(async ing => {
-  if (ing.Raw.spec.ingressClassName == 'pepr-demo') {
-    const k8s = new K8sAPI();
+  .IsCreatedOrUpdated()
+  .InNamespace("pepr-demo")
+  .Then(async ing => {
+    if (ing.Raw.spec.ingressClassName == "pepr-demo") {
+      const k8s = new K8sAPI();
 
-    try {
-      await k8s.createOrUpdateVirtualService(ing.Raw);
-    } catch (e) {
-      console.error("Failed to create or update VirtualService:", e);
+      try {
+        await k8s.createOrUpdateVirtualService(ing.Raw);
+      } catch (e) {
+        console.error("Failed to create or update VirtualService:", e);
+      }
     }
-  }
-});
+  });
