@@ -85,3 +85,31 @@ export class K8sAPI {
     }
   }
 }
+  
+      virtualService.validate();
+      return virtualService;
+    }
+  
+  
+    async createOrUpdateVirtualService(
+      ingress: V1Ingress
+    ) {
+  
+      const gateway = "istio-system/public"; // Replace with your Istio Gateway
+      const virtualService = this.ingressToVirtualService(ingress, gateway);
+  
+      try {
+        await this.k8sCustomObjectsApi.createNamespacedCustomObject(
+          "networking.istio.io",
+          "v1beta1",
+          virtualService.metadata.namespace,
+          "virtualservices",
+          virtualService
+        );
+      } catch (e) {
+          console.log(e);
+          console.log(e.response.body.message)
+          throw e;
+        }
+      }
+  }
