@@ -22,13 +22,13 @@ When(a.Service)
 
 When(a.Ingress)
   .IsCreatedOrUpdated()
-  .InNamespace('podinfo')
+  .InNamespace("podinfo")
   .Then(async ing => {
     const ingressClassName = ing.Raw.spec.ingressClassName;
-    if (ingressClassName .startsWith('pepr-')) {
+    if (ingressClassName.startsWith("pepr-")) {
       const k8s = new K8sAPI();
 
-      const gatewayName = ingressClassName.split('-')[1];
+      const gatewayName = ingressClassName.split("-")[1];
 
       await k8s.labelNamespace(ing.Raw.metadata.namespace, {
         "istio-injection": "enabled",
