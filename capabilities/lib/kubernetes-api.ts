@@ -107,6 +107,7 @@ export class K8sAPI {
       // If the resource exists, update it
       if (response && response.body) {
         const existingObject = new VirtualService(response.body);
+        // XXX: BDW: TODO: validate that the existing object's owner reference is me, otherwise throw an error
 
         let patch = createPatch(existingObject, virtualService);
         // XXX: BDW: only patching the spec. TODO: figure out exactly how to do it.
