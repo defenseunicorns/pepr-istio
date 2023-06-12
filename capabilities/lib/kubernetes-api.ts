@@ -5,18 +5,12 @@ import {
   KubeConfig,
   V1Ingress,
   NetworkingV1Api,
+  PatchUtils,
 } from "@kubernetes/client-node";
+import { PeprRequest } from "pepr";
 
 import { VirtualService } from "@kubernetes-models/istio/networking.istio.io/v1beta1";
-// Should the operations below be done on the custom GVK IstioVirtualService or VirtualService?
-//import { IstioVirtualService } from "./istio";
-
-/*
-    TODO: 
-    MONDAY 
-    - create a way to PATCH a virtual service with pepr's fast-json-patch ability (action in istio.ts)
-    - create a way to delete a virtual service (action in istio.ts)
-  */
+import { createPatch } from "rfc6902";
 
 export class K8sAPI {
   k8sApi: CoreV1Api;
@@ -34,13 +28,26 @@ export class K8sAPI {
   }
 
   private ingressToVirtualService(
-    ingress: V1Ingress,
+    peprRequest: PeprRequest<V1Ingress>,
     gateway: string
   ): VirtualService {
+    const ingress = peprRequest.Raw;
+    peprRequest.Request.uid;
+    const ownerReference = {
+      apiVersion: ingress.apiVersion,
+      kind: ingress.kind,
+      name: peprRequest.Request.name,
+      // XXX: BDW: need the persisted uid, this is the uid of the request
+      uid: peprRequest.Request.uid,
+    };
+
     const virtualService = new VirtualService({
       metadata: {
         name: ingress.metadata.name,
         namespace: ingress.metadata.namespace,
+        labels: ingress.metadata.labels,
+        annotations: ingress.metadata.annotations,
+        //ownerReferences: [ownerReference],
       },
       spec: {
         gateways: [gateway],
@@ -78,37 +85,60 @@ export class K8sAPI {
     return virtualService;
   }
 
-  async createOrUpdateVirtualService(ingress: V1Ingress, gateway: string) {
-    const virtualService = this.ingressToVirtualService(ingress, gateway);
+  async upsertVirtualService(
+    peprRequest: PeprRequest<V1Ingress>,
+    gateway: string
+  ) {
+    const virtualService = this.ingressToVirtualService(peprRequest, gateway);
+
+    const group = virtualService.apiVersion.split("/")[0];
+    const version = virtualService.apiVersion.split("/")[1];
+    const plural = virtualService.kind.toLocaleLowerCase() + "s";
 
     try {
-      // ON MONDAY, lets continue to create a way to PATCH a virtual service with pepr's fast-json-patch ability
-      await this.k8sCustomObjectsApi.createNamespacedCustomObject(
-        // is there a better way to do this?
-        VirtualService.apiVersion.split("/")[0],
-        VirtualService.apiVersion.split("/")[1],
+      const response = await this.k8sCustomObjectsApi.getNamespacedCustomObject(
+        group,
+        version,
         virtualService.metadata.namespace,
-        VirtualService.kind.toLocaleLowerCase() + "s",
-        virtualService
+        plural,
+        virtualService.metadata.name
       );
-    } catch (e) {
-      if (e.response.body.code === 409) {
-        const existingVs =
-          await this.k8sCustomObjectsApi.getNamespacedCustomObject(
-            VirtualService.apiVersion.split("/")[0],
-            VirtualService.apiVersion.split("/")[1],
-            virtualService.metadata.namespace,
-            VirtualService.kind.toLocaleLowerCase() + "s",
-            virtualService.metadata.name
-          );
 
-        const temp = new VirtualService(existingVs.body);
-      } else {
-        console.error(`Failed to replace the custom object: ${e.body.message}`);
+      // If the resource exists, update it
+      if (response && response.body) {
+        const existingObject = new VirtualService(response.body);
+
+        let patch = createPatch(existingObject, virtualService);
+        // XXX: BDW: only patching the spec. TODO: figure out exactly how to do it.
+        patch = patch.filter(operation => operation.path.startsWith("/spec"));
+        if (patch.length > 0) {
+          await this.k8sCustomObjectsApi.patchNamespacedCustomObject(
+            group,
+            version,
+            virtualService.metadata.namespace,
+            plural,
+            virtualService.metadata.name,
+            patch,
+            undefined,
+            undefined,
+            undefined,
+            { headers: { "Content-Type": PatchUtils.PATCH_FORMAT_JSON_PATCH } }
+          );
+        }
       }
-      console.log(e);
-      console.log(e.response.body.message);
-      throw e;
+    } catch (error) {
+      // If the resource doesn't exist, create it
+      if (error.response && error.response.statusCode === 404) {
+        await this.k8sCustomObjectsApi.createNamespacedCustomObject(
+          group,
+          version,
+          virtualService.metadata.namespace,
+          plural,
+          virtualService
+        );
+      } else {
+        throw error;
+      }
     }
   }
 
@@ -130,11 +160,5 @@ export class K8sAPI {
       undefined,
       { headers: { "Content-Type": "application/json-patch+json" } }
     );
-  }
-
-  //  - create a way to delete a virtual service
-  async deleteIstioVirtualService() {
-    //const existingVs = await this.k8sCustomObjectsApi.getNamespacedCustomObject(...)
-    //await this.k8sCustomObjectsApi.deleteNamespacedCustomObject(...)
   }
 }

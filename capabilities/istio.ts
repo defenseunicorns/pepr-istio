@@ -1,5 +1,4 @@
 import { Capability, RegisterKind, a } from "pepr";
-
 import { K8sAPI } from "./lib/kubernetes-api";
 import { VirtualService } from "@kubernetes-models/istio/networking.istio.io/v1beta1";
 
@@ -9,7 +8,6 @@ export const Istio = new Capability({
   namespaces: [],
 });
 
-// Use the 'When' function to create a new Capability Action
 const { When } = Istio;
 
 export class IstioVirtualService extends a.GenericKind {
@@ -20,69 +18,30 @@ export class IstioVirtualService extends a.GenericKind {
 }
 
 RegisterKind(IstioVirtualService, {
-  group: "networking.istio.io",
-  version: "v1beta1",
-  kind: "VirtualService",
+  group: VirtualService.apiVersion.split("/")[0],
+  version: VirtualService.apiVersion.split("/")[1],
+  kind: VirtualService.kind,
 });
 
-// When(a.<Kind>).Is<Event>().Then(change => change.<changes>
-When(a.Service)
-  .IsCreated()
-  .Then(svc => {
-    console.log("Service created:", svc);
-  });
-
-// Ingress may not be the correct entrypoint for this, but for now it is ok!
+// ingress object will create a virtual service
 When(a.Ingress)
   .IsCreatedOrUpdated()
-  .InNamespace("podinfo")
   .Then(async ing => {
     const ingressClassName = ing.Raw.spec.ingressClassName;
     if (ingressClassName.startsWith("pepr-")) {
-      const k8s = new K8sAPI();
-
       const gatewayName = ingressClassName.split("-")[1];
 
+      const k8s = new K8sAPI();
       await k8s.labelNamespace(ing.Raw.metadata.namespace, {
         "istio-injection": "enabled",
       });
 
       try {
-        await k8s.createOrUpdateVirtualService(ing.Raw, gatewayName);
+        // XXX: BDW: todo add the owner reference to the virtual service
+        await k8s.upsertVirtualService(ing, gatewayName);
       } catch (e) {
         console.error("Failed to create or update VirtualService:", e);
       }
-    }
-  });
-
-// - create a way to PATCH a virtual service with pepr's fast-json-patch ability
-// What would be the right action (and on what resource) to fire off a patch action on an Istio Virtual Service? I have no idea.
-When(IstioVirtualService)
-  .IsCreated()
-  .WithName("Some target VS name?")
-  .ThenSet({
-    metadata: {
-      labels: {
-        pepr: "patch it",
-      },
-      annotations: {
-        "pepr.dev": "patched-virtual-service",
-      },
-    },
-  });
-
-// - create a way to delete a virtual service
-When(a.Ingress)
-  .IsDeleted()
-  .InNamespace("podinfo")
-  .Then(async ing => {
-    try {
-      // Can ing be parsed to find associated Istio Virtual Service?
-      // Do the API need to be called via the node client in order to delete the VS - or is manipulating objects directly in this action enough?
-      const k8s = new K8sAPI();
-      k8s.deleteIstioVirtualService();
-    } catch (e) {
-      console.error("Failed to delete VirtualService:", e);
     }
   });
 
@@ -99,33 +58,32 @@ If the sni is populated capture the
 
 We still need to determine if the passthrough gateway is intended for the admin or tenant IngressGateway
 */
-let gateway = "";
-let host = "";
-let ns = "";
-let isPassthrough = false;
+
 When(IstioVirtualService)
   .IsCreated()
   .Then(async vs => {
-    vs.SetLabel("blah", "blah");
-    isPassthrough = false;
+    let host;
+    let gateway;
+    const ns = vs.Raw.metadata.namespace;
+    let isPassthrough = false;
 
     if (vs.Raw.spec.tls) {
-      if (
-        vs.Raw.spec.tls[0].match[0].sniHosts &&
-        vs.Raw.spec.tls[0].match[0].sniHosts.length > 0
-      ) {
-        isPassthrough = true;
+      isPassthrough = vs?.Raw?.spec?.tls?.[0]?.match?.[0]?.sniHosts?.length > 0;
+      if (isPassthrough) {
         host = vs.Raw.spec.tls[0].match[0].sniHosts[0];
-        ns = vs.Raw.metadata.namespace;
 
-        if (vs.Raw.spec.gateways && vs.Raw.spec.gateways.length > 0) {
+        if (vs?.Raw?.spec?.gateways?.length > 0) {
           gateway = vs.Raw.spec.gateways[0];
         }
       } else {
+        // If we get here, it's an invalid virtual service
         console.log("sniHosts is empty");
       }
     }
-    //        let domainX: string =   vs.Raw.spec.tls[0].match[0].sniHosts[0].
+
+    if (isPassthrough) {
+      // XXX: BDW: TODO: create the gateway object
+    }
     console.log("host:" + host);
     console.log("gateway:" + gateway);
     console.log("namespace:" + ns);
