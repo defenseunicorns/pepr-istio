@@ -13,7 +13,7 @@ export const Istio = new Capability({
 const { When } = Istio;
 
 export class IstioVirtualService extends a.GenericKind {
-  spec:  VirtualService["spec"];
+  spec: VirtualService["spec"];
   status?: VirtualService["status"];
   static apiVersion: VirtualService["apiVersion"];
   static kind: VirtualService["kind"];
@@ -35,13 +35,13 @@ When(a.Service)
 // Ingress may not be the correct entrypoint for this, but for now it is ok!
 When(a.Ingress)
   .IsCreatedOrUpdated()
-  .InNamespace('podinfo')
+  .InNamespace("podinfo")
   .Then(async ing => {
     const ingressClassName = ing.Raw.spec.ingressClassName;
-    if (ingressClassName .startsWith('pepr-')) {
+    if (ingressClassName.startsWith("pepr-")) {
       const k8s = new K8sAPI();
 
-      const gatewayName = ingressClassName.split('-')[1];
+      const gatewayName = ingressClassName.split("-")[1];
 
       await k8s.labelNamespace(ing.Raw.metadata.namespace, {
         "istio-injection": "enabled",
@@ -54,7 +54,7 @@ When(a.Ingress)
       }
     }
   });
-  
+
 // - create a way to PATCH a virtual service with pepr's fast-json-patch ability
 // What would be the right action (and on what resource) to fire off a patch action on an Istio Virtual Service? I have no idea.
 When(IstioVirtualService)
@@ -74,16 +74,16 @@ When(IstioVirtualService)
 // - create a way to delete a virtual service
 When(a.Ingress)
   .IsDeleted()
-  .InNamespace('podinfo')
+  .InNamespace("podinfo")
   .Then(async ing => {
-      try {
-        // Can ing be parsed to find associated Istio Virtual Service?
-        // Do the API need to be called via the node client in order to delete the VS - or is manipulating objects directly in this action enough?
-        const k8s = new K8sAPI();
-        k8s.deleteIstioVirtualService();
-      } catch (e) {
-        console.error("Failed to delete VirtualService:", e);
-      }
+    try {
+      // Can ing be parsed to find associated Istio Virtual Service?
+      // Do the API need to be called via the node client in order to delete the VS - or is manipulating objects directly in this action enough?
+      const k8s = new K8sAPI();
+      k8s.deleteIstioVirtualService();
+    } catch (e) {
+      console.error("Failed to delete VirtualService:", e);
+    }
   });
 
 /* We assume that any virtualService that is created with a populated value in 
@@ -98,35 +98,36 @@ If the sni is populated capture the
 * spec.hosts
 
 We still need to determine if the passthrough gateway is intended for the admin or tenant IngressGateway
-*/  
-let gateway: string = '';
-let host: string = '';
-let ns: string = '';
-let isPassthrough: boolean = false;
+*/
+let gateway = "";
+let host = "";
+let ns = "";
+let isPassthrough = false;
 When(IstioVirtualService)
   .IsCreated()
   .Then(async vs => {
-    vs.SetLabel("blah","blah")
-    isPassthrough = false; 
+    vs.SetLabel("blah", "blah");
+    isPassthrough = false;
 
-    if (vs.Raw.spec.tls){
-      if (vs.Raw.spec.tls[0].match[0].sniHosts && vs.Raw.spec.tls[0].match[0].sniHosts.length > 0) {
-
+    if (vs.Raw.spec.tls) {
+      if (
+        vs.Raw.spec.tls[0].match[0].sniHosts &&
+        vs.Raw.spec.tls[0].match[0].sniHosts.length > 0
+      ) {
         isPassthrough = true;
         host = vs.Raw.spec.tls[0].match[0].sniHosts[0];
-        ns = vs.Raw.metadata.namespace
+        ns = vs.Raw.metadata.namespace;
 
-        if( vs.Raw.spec.gateways && vs.Raw.spec.gateways.length > 0) {
-            gateway = vs.Raw.spec.gateways[0];
+        if (vs.Raw.spec.gateways && vs.Raw.spec.gateways.length > 0) {
+          gateway = vs.Raw.spec.gateways[0];
         }
       } else {
         console.log("sniHosts is empty");
       }
     }
-//        let domainX: string =   vs.Raw.spec.tls[0].match[0].sniHosts[0].
+    //        let domainX: string =   vs.Raw.spec.tls[0].match[0].sniHosts[0].
     console.log("host:" + host);
     console.log("gateway:" + gateway);
     console.log("namespace:" + ns);
     console.log("isPassthrough:" + isPassthrough);
-
   });
