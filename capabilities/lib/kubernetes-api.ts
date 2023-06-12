@@ -7,16 +7,17 @@ import {
     NetworkingV1Api
   } from "@kubernetes/client-node";
 
-/*
-  TODO: 
-  MONDAY 
-  - create a way to PATCH a virtual service with pepr's fast-json-patch ability
-  - create a way to delete a virtual service  
-*/  
-  
-  import { PeprModule, fetchStatus } from "pepr";
   import { VirtualService } from "@kubernetes-models/istio/networking.istio.io/v1beta1";
-  
+  // Should the operations below be done on the custom GVK IstioVirtualService or VirtualService? 
+  //import { IstioVirtualService } from "./istio";
+
+  /*
+    TODO: 
+    MONDAY 
+    - create a way to PATCH a virtual service with pepr's fast-json-patch ability (action in istio.ts)
+    - create a way to delete a virtual service (action in istio.ts)
+  */
+
   export class K8sAPI {
     k8sApi: CoreV1Api;
     k8sAppsV1Api: AppsV1Api;
@@ -109,7 +110,7 @@ import {
           console.log(e.response.body.message)
           throw e;
         }
-      }
+    }
 
     // store for notes, delete later: istio-injection=disabled 
     async labelNamespace(namespace: string, labels: {[key: string]: string}) {
@@ -129,6 +130,12 @@ import {
           undefined,
           { headers: { "Content-Type": "application/json-patch+json" } }
       );
-  }
+    }
+
+    //  - create a way to delete a virtual service 
+    async deleteIstioVirtualService() {
+      //const existingVs = await this.k8sCustomObjectsApi.getNamespacedCustomObject(...)
+      //await this.k8sCustomObjectsApi.deleteNamespacedCustomObject(...)
+    }
           
   }
