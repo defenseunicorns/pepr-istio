@@ -8,7 +8,10 @@ import {
   PatchUtils,
 } from "@kubernetes/client-node";
 
-import { VirtualService } from "@kubernetes-models/istio/networking.istio.io/v1beta1";
+import {
+  VirtualService,
+  Gateway,
+} from "@kubernetes-models/istio/networking.istio.io/v1beta1";
 import { createPatch } from "rfc6902";
 
 export class K8sAPI {
@@ -100,7 +103,13 @@ export class K8sAPI {
       // If the resource exists, update it
       if (response && response.body) {
         const existingObject = new VirtualService(response.body);
-        // XXX: BDW: TODO: validate that the existing object's owner reference is me, otherwise throw an error
+
+        // TODO: need to figure out what to do with multiple owners, or no owners?
+        if (
+          existingObject.metadata.ownerReferences[0].uid != ingress.metadata.uid
+        ) {
+          throw new Error("Ingress already exists with a different owner");
+        }
 
         let patch = createPatch(existingObject, virtualService);
         // XXX: BDW: only patching the spec. TODO: figure out exactly how to do it.
@@ -169,6 +178,98 @@ export class K8sAPI {
     } catch (error) {
       if (error.response && error.response.statusCode === 404) {
         return;
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  async upsertGateway(ingress: V1Ingress, gatewayName: string) {
+    if (!ingress.spec.rules || !ingress.spec.rules[0].host) {
+      throw new Error("Ingress object is missing host in rules");
+    }
+
+    const host = ingress.spec.rules[0].host;
+
+    if (host.includes("*")) {
+      throw new Error("Wildcard hosts are not supported in gateways");
+    }
+
+    const ownerReference = {
+      apiVersion: ingress.apiVersion,
+      kind: ingress.kind,
+      name: ingress.metadata.name,
+      uid: ingress.metadata.uid,
+    };
+
+    const gateway = new Gateway({
+      metadata: {
+        name: gatewayName,
+        namespace: ingress.metadata.namespace,
+        ownerReferences: [ownerReference],
+      },
+      spec: {
+        selector: {
+          istio: "ingressgateway",
+        },
+        servers: [
+          {
+            port: {
+              number: 443,
+              name: "https",
+              protocol: "HTTPS",
+            },
+            hosts: [host],
+            tls: {
+              mode: "PASSTHROUGH",
+            },
+          },
+        ],
+      },
+    });
+
+    const apiGroup = gateway.apiVersion.split("/")[0];
+    const apiVersion = gateway.apiVersion.split("/")[1];
+    const plural = gateway.kind.toLocaleLowerCase() + "s";
+
+    try {
+      const response = await this.k8sCustomObjectsApi.getNamespacedCustomObject(
+        apiGroup,
+        apiVersion,
+        ingress.metadata.namespace,
+        plural,
+        gatewayName
+      );
+
+      // If the resource exists, update it
+      if (response && response.body) {
+        let patch = createPatch(response.body, gateway);
+        patch = patch.filter(operation => operation.path.startsWith("/spec"));
+        if (patch.length > 0) {
+          await this.k8sCustomObjectsApi.patchNamespacedCustomObject(
+            apiGroup,
+            apiVersion,
+            ingress.metadata.namespace,
+            plural,
+            gatewayName,
+            patch,
+            undefined,
+            undefined,
+            undefined,
+            { headers: { "Content-Type": PatchUtils.PATCH_FORMAT_JSON_PATCH } }
+          );
+        }
+      }
+    } catch (error) {
+      // If the resource doesn't exist, create it
+      if (error.response && error.response.statusCode === 404) {
+        await this.k8sCustomObjectsApi.createNamespacedCustomObject(
+          apiGroup,
+          apiVersion,
+          ingress.metadata.namespace,
+          plural,
+          gateway
+        );
       } else {
         throw error;
       }

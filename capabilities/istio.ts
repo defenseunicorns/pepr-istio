@@ -23,14 +23,48 @@ RegisterKind(IstioVirtualService, {
   kind: VirtualService.kind,
 });
 
-// ingress object will create a virtual service
+// This capability will only create a gateway if:
+// 1. the ingress class's format for namespace is not set (or set to the same namespace as the ingress)
+// 2. the ingress class must not have wildcards in it. This will be SNI and needs to be a complete match
+//
+// If the ingress class's hostname does have a wildcard in it, and the namespace is the same as the ingress, this is an error
+function parseIngressClass(
+  mynamespace: string,
+  input: string
+): { createIngress: boolean; gateway: string } {
+  const regex = /^pepr-(?:(?<namespace>.+?)\.)?(?<gatewayName>.+)$/;
+  const match = input.match(regex);
+
+  if (match) {
+    const { namespace, gatewayName } = match.groups;
+    if (namespace === undefined || namespace === mynamespace) {
+      return {
+        createIngress: true,
+        gateway: gatewayName,
+      };
+    } else {
+      return {
+        createIngress: false,
+        gateway: `${namespace}/${gatewayName}`,
+      };
+    }
+  }
+
+  return {
+    createIngress: false,
+    gateway: undefined,
+  };
+}
+
+// ingress object will create a virtual service and maybe the gateway
 When(a.Ingress)
   .IsCreatedOrUpdated()
   .Then(async ing => {
-    const ingressClassName = ing.Raw.spec.ingressClassName;
-    if (ingressClassName.startsWith("pepr-")) {
-      const gatewayName = ingressClassName.split("-")[1];
-
+    const ingressClass = parseIngressClass(
+      ing.Raw.metadata.namespace,
+      ing.Raw.spec.ingressClassName
+    );
+    if (ingressClass.gateway !== undefined) {
       const k8s = new K8sAPI();
       await k8s.labelNamespace(ing.Raw.metadata.namespace, {
         "istio-injection": "enabled",
@@ -39,7 +73,10 @@ When(a.Ingress)
       // if this is an update, we have the uid already
       if (ing.Raw.metadata.uid !== undefined) {
         try {
-          await k8s.upsertVirtualService(ing.Raw, gatewayName);
+          if (ingressClass.createIngress) {
+            await k8s.upsertGateway(ing.Raw, ingressClass.gateway);
+          }
+          await k8s.upsertVirtualService(ing.Raw, ingressClass.gateway);
         } catch (e) {
           console.error("Failed to create or update VirtualService:", e);
         }
@@ -54,7 +91,10 @@ When(a.Ingress)
                 ing.Raw.metadata.name
               );
               if (ingress != undefined) {
-                await k8s.upsertVirtualService(ingress, gatewayName);
+                if (ingressClass.createIngress) {
+                  await k8s.upsertGateway(ingress, ingressClass.gateway);
+                }
+                await k8s.upsertVirtualService(ingress, ingressClass.gateway);
                 break;
               }
               await delay(1000);
@@ -65,51 +105,6 @@ When(a.Ingress)
         });
       }
     }
-  });
-
-/* We assume that any virtualService that is created with a populated value in 
-vs.Raw.spec.tls[0].match[0].sniHosts requires a corresponding Gateway object for 
-TLS passthrough
-
-The relation is one passthrough gateway to one virtual service, meaning multiple hosts or gateways will not be listed in the VirtualService
-
-Things we need from the virtual service in order to properly configure the Gateway 
-If the sni is populated capture the 
-* spec.gateway 
-* spec.hosts
-
-We still need to determine if the passthrough gateway is intended for the admin or tenant IngressGateway
-*/
-
-When(IstioVirtualService)
-  .IsCreated()
-  .Then(async vs => {
-    let host;
-    let gateway;
-    const ns = vs.Raw.metadata.namespace;
-    let isPassthrough = false;
-
-    if (vs.Raw.spec.tls) {
-      isPassthrough = vs?.Raw?.spec?.tls?.[0]?.match?.[0]?.sniHosts?.length > 0;
-      if (isPassthrough) {
-        host = vs.Raw.spec.tls[0].match[0].sniHosts[0];
-
-        if (vs?.Raw?.spec?.gateways?.length > 0) {
-          gateway = vs.Raw.spec.gateways[0];
-        }
-      } else {
-        // If we get here, it's an invalid virtual service
-        console.log("sniHosts is empty");
-      }
-    }
-
-    if (isPassthrough) {
-      // XXX: BDW: TODO: create the gateway object
-    }
-    console.log("host:" + host);
-    console.log("gateway:" + gateway);
-    console.log("namespace:" + ns);
-    console.log("isPassthrough:" + isPassthrough);
   });
 
 // temporary until we can have a post persisted builder
