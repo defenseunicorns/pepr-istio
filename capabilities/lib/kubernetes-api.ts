@@ -7,7 +7,6 @@ import {
   NetworkingV1Api,
   PatchUtils,
 } from "@kubernetes/client-node";
-import { PeprRequest } from "pepr";
 
 import { VirtualService } from "@kubernetes-models/istio/networking.istio.io/v1beta1";
 import { createPatch } from "rfc6902";
@@ -16,7 +15,7 @@ export class K8sAPI {
   k8sApi: CoreV1Api;
   k8sAppsV1Api: AppsV1Api;
   k8sCustomObjectsApi: CustomObjectsApi;
-  networkingV1Api: NetworkingV1Api; // or NetworkingV1beta1Api
+  networkingV1Api: NetworkingV1Api;
 
   constructor() {
     const kc = new KubeConfig();
@@ -24,21 +23,18 @@ export class K8sAPI {
     this.k8sApi = kc.makeApiClient(CoreV1Api);
     this.k8sAppsV1Api = kc.makeApiClient(AppsV1Api);
     this.k8sCustomObjectsApi = kc.makeApiClient(CustomObjectsApi);
-    this.networkingV1Api = kc.makeApiClient(NetworkingV1Api); // or NetworkingV1beta1Api
+    this.networkingV1Api = kc.makeApiClient(NetworkingV1Api);
   }
 
   private ingressToVirtualService(
-    peprRequest: PeprRequest<V1Ingress>,
+    ingress: V1Ingress,
     gateway: string
   ): VirtualService {
-    const ingress = peprRequest.Raw;
-    peprRequest.Request.uid;
     const ownerReference = {
       apiVersion: ingress.apiVersion,
       kind: ingress.kind,
-      name: peprRequest.Request.name,
-      // XXX: BDW: need the persisted uid, this is the uid of the request
-      uid: peprRequest.Request.uid,
+      name: ingress.metadata.name,
+      uid: ingress.metadata.uid,
     };
 
     const virtualService = new VirtualService({
@@ -47,7 +43,7 @@ export class K8sAPI {
         namespace: ingress.metadata.namespace,
         labels: ingress.metadata.labels,
         annotations: ingress.metadata.annotations,
-        //ownerReferences: [ownerReference],
+        ownerReferences: [ownerReference],
       },
       spec: {
         gateways: [gateway],
@@ -85,11 +81,8 @@ export class K8sAPI {
     return virtualService;
   }
 
-  async upsertVirtualService(
-    peprRequest: PeprRequest<V1Ingress>,
-    gateway: string
-  ) {
-    const virtualService = this.ingressToVirtualService(peprRequest, gateway);
+  async upsertVirtualService(ingress: V1Ingress, gateway: string) {
+    const virtualService = this.ingressToVirtualService(ingress, gateway);
 
     const group = virtualService.apiVersion.split("/")[0];
     const version = virtualService.apiVersion.split("/")[1];
@@ -161,5 +154,24 @@ export class K8sAPI {
       undefined,
       { headers: { "Content-Type": "application/json-patch+json" } }
     );
+  }
+
+  async getIngress(
+    namespace: string,
+    name: string
+  ): Promise<V1Ingress | undefined> {
+    try {
+      const response = await this.networkingV1Api.readNamespacedIngress(
+        name,
+        namespace
+      );
+      return response.body;
+    } catch (error) {
+      if (error.response && error.response.statusCode === 404) {
+        return;
+      } else {
+        throw error;
+      }
+    }
   }
 }

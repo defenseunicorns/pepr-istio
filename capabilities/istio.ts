@@ -36,11 +36,33 @@ When(a.Ingress)
         "istio-injection": "enabled",
       });
 
-      try {
-        // XXX: BDW: todo add the owner reference to the virtual service
-        await k8s.upsertVirtualService(ing, gatewayName);
-      } catch (e) {
-        console.error("Failed to create or update VirtualService:", e);
+      // if this is an update, we have the uid already
+      if (ing.Raw.metadata.uid !== undefined) {
+        try {
+          await k8s.upsertVirtualService(ing.Raw, gatewayName);
+        } catch (e) {
+          console.error("Failed to create or update VirtualService:", e);
+        }
+      } else {
+        // The ingress needs to persist to the control plane so the uid becomes immutable.
+        setImmediate(async () => {
+          try {
+            let counter = 0;
+            while (counter++ < 60) {
+              const ingress = await k8s.getIngress(
+                ing.Raw.metadata.namespace,
+                ing.Raw.metadata.name
+              );
+              if (ingress != undefined) {
+                await k8s.upsertVirtualService(ingress, gatewayName);
+                break;
+              }
+              await delay(1000);
+            }
+          } catch (e) {
+            console.error("Failed to create or update VirtualService:", e);
+          }
+        });
       }
     }
   });
@@ -89,3 +111,8 @@ When(IstioVirtualService)
     console.log("namespace:" + ns);
     console.log("isPassthrough:" + isPassthrough);
   });
+
+// temporary until we can have a post persisted builder
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
