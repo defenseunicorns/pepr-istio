@@ -5,14 +5,22 @@ import {
   KubeConfig,
   V1Ingress,
   NetworkingV1Api,
-  PatchUtils,
 } from "@kubernetes/client-node";
 
 import {
   VirtualService,
   Gateway,
 } from "@kubernetes-models/istio/networking.istio.io/v1beta1";
-import { createPatch } from "rfc6902";
+
+type K8sModel = {
+  apiVersion: string;
+  kind: string;
+};
+function getGroupVersionPlural(model: K8sModel) {
+  const [group, version] = model.apiVersion.split("/");
+  const plural = model.kind.toLocaleLowerCase() + "s";
+  return { group, version, plural };
+}
 
 export class K8sAPI {
   k8sApi: CoreV1Api;
@@ -33,20 +41,10 @@ export class K8sAPI {
     ingress: V1Ingress,
     gateway: string
   ): VirtualService {
-    const ownerReference = {
-      apiVersion: ingress.apiVersion,
-      kind: ingress.kind,
-      name: ingress.metadata.name,
-      uid: ingress.metadata.uid,
-    };
-
     const virtualService = new VirtualService({
       metadata: {
         name: ingress.metadata.name,
         namespace: ingress.metadata.namespace,
-        labels: ingress.metadata.labels,
-        annotations: ingress.metadata.annotations,
-        ownerReferences: [ownerReference],
       },
       spec: {
         gateways: [gateway],
@@ -85,49 +83,38 @@ export class K8sAPI {
   }
 
   async upsertVirtualService(ingress: V1Ingress, gateway: string) {
-    const virtualService = this.ingressToVirtualService(ingress, gateway);
+    const modifiedVirtualService = this.ingressToVirtualService(
+      ingress,
+      gateway
+    );
 
-    const group = virtualService.apiVersion.split("/")[0];
-    const version = virtualService.apiVersion.split("/")[1];
-    const plural = virtualService.kind.toLocaleLowerCase() + "s";
+    const { group, version, plural } = getGroupVersionPlural(VirtualService);
 
     try {
       const response = await this.k8sCustomObjectsApi.getNamespacedCustomObject(
         group,
         version,
-        virtualService.metadata.namespace,
+        modifiedVirtualService.metadata.namespace,
         plural,
-        virtualService.metadata.name
+        modifiedVirtualService.metadata.name
       );
 
       // If the resource exists, update it
       if (response && response.body) {
-        const existingObject = new VirtualService(response.body);
+        const object = new VirtualService(response.body);
+        object.spec = modifiedVirtualService.spec;
 
-        // TODO: need to figure out what to do with multiple owners, or no owners?
-        if (
-          existingObject.metadata.ownerReferences[0].uid != ingress.metadata.uid
-        ) {
-          throw new Error("Ingress already exists with a different owner");
-        }
-
-        let patch = createPatch(existingObject, virtualService);
-        // XXX: BDW: only patching the spec. TODO: figure out exactly how to do it.
-        patch = patch.filter(operation => operation.path.startsWith("/spec"));
-        if (patch.length > 0) {
-          await this.k8sCustomObjectsApi.patchNamespacedCustomObject(
-            group,
-            version,
-            virtualService.metadata.namespace,
-            plural,
-            virtualService.metadata.name,
-            patch,
-            undefined,
-            undefined,
-            undefined,
-            { headers: { "Content-Type": PatchUtils.PATCH_FORMAT_JSON_PATCH } }
-          );
-        }
+        await this.k8sCustomObjectsApi.replaceNamespacedCustomObject(
+          group,
+          version,
+          modifiedVirtualService.metadata.namespace,
+          plural,
+          modifiedVirtualService.metadata.name,
+          object,
+          undefined,
+          undefined,
+          undefined
+        );
       }
     } catch (error) {
       // If the resource doesn't exist, create it
@@ -135,9 +122,9 @@ export class K8sAPI {
         await this.k8sCustomObjectsApi.createNamespacedCustomObject(
           group,
           version,
-          virtualService.metadata.namespace,
+          modifiedVirtualService.metadata.namespace,
           plural,
-          virtualService
+          modifiedVirtualService
         );
       } else {
         throw error;
@@ -190,23 +177,14 @@ export class K8sAPI {
     }
 
     const host = ingress.spec.rules[0].host;
-
     if (host.includes("*")) {
       throw new Error("Wildcard hosts are not supported in gateways");
     }
 
-    const ownerReference = {
-      apiVersion: ingress.apiVersion,
-      kind: ingress.kind,
-      name: ingress.metadata.name,
-      uid: ingress.metadata.uid,
-    };
-
-    const gateway = new Gateway({
+    const modifiedGateway = new Gateway({
       metadata: {
         name: gatewayName,
         namespace: ingress.metadata.namespace,
-        ownerReferences: [ownerReference],
       },
       spec: {
         selector: {
@@ -228,14 +206,11 @@ export class K8sAPI {
       },
     });
 
-    const apiGroup = gateway.apiVersion.split("/")[0];
-    const apiVersion = gateway.apiVersion.split("/")[1];
-    const plural = gateway.kind.toLocaleLowerCase() + "s";
-
+    const { group, version, plural } = getGroupVersionPlural(Gateway);
     try {
       const response = await this.k8sCustomObjectsApi.getNamespacedCustomObject(
-        apiGroup,
-        apiVersion,
+        group,
+        version,
         ingress.metadata.namespace,
         plural,
         gatewayName
@@ -243,34 +218,65 @@ export class K8sAPI {
 
       // If the resource exists, update it
       if (response && response.body) {
-        let patch = createPatch(response.body, gateway);
-        patch = patch.filter(operation => operation.path.startsWith("/spec"));
-        if (patch.length > 0) {
-          await this.k8sCustomObjectsApi.patchNamespacedCustomObject(
-            apiGroup,
-            apiVersion,
-            ingress.metadata.namespace,
-            plural,
-            gatewayName,
-            patch,
-            undefined,
-            undefined,
-            undefined,
-            { headers: { "Content-Type": PatchUtils.PATCH_FORMAT_JSON_PATCH } }
-          );
-        }
+        const object = new Gateway(response.body);
+        object.spec = modifiedGateway.spec;
+        await this.k8sCustomObjectsApi.replaceNamespacedCustomObject(
+          group,
+          version,
+          ingress.metadata.namespace,
+          plural,
+          gatewayName,
+          object,
+          undefined,
+          undefined,
+          undefined
+        );
       }
     } catch (error) {
       // If the resource doesn't exist, create it
       if (error.response && error.response.statusCode === 404) {
         await this.k8sCustomObjectsApi.createNamespacedCustomObject(
-          apiGroup,
-          apiVersion,
+          group,
+          version,
           ingress.metadata.namespace,
           plural,
-          gateway
+          modifiedGateway
         );
       } else {
+        throw error;
+      }
+    }
+  }
+
+  async deleteVirtualService(namespace: string, name: string) {
+    const { group, version, plural } = getGroupVersionPlural(VirtualService);
+    try {
+      await this.k8sCustomObjectsApi.deleteNamespacedCustomObject(
+        group,
+        version,
+        namespace,
+        plural,
+        name
+      );
+    } catch (error) {
+      if (error.response && error.response.statusCode !== 404) {
+        throw error;
+      }
+    }
+  }
+
+  async deleteGateway(namespace: string, name: string) {
+    const { group, version, plural } = getGroupVersionPlural(Gateway);
+    try {
+      await this.k8sCustomObjectsApi.deleteNamespacedCustomObject(
+        group,
+        version,
+        namespace,
+        plural,
+        name
+      );
+    } catch (error) {
+      if (error.response && error.response.statusCode !== 404) {
         throw error;
       }
     }

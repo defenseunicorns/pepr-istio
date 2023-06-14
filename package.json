@@ -31,10 +31,9 @@
     "test": "echo \"Test entrypoint goes here\""
   },
   "dependencies": {
-    "@kubernetes-models/istio": "^2.2.2",
+    "@kubernetes-models/istio": "^2.3.0",
     "@kubernetes/client-node": "^0.18.1",
-    "pepr": "0.7.0",
-    "rfc6902": "^5.0.1"
+    "pepr": "0.7.0"
   },
   "devDependencies": {
     "typescript": "5.0.4"
