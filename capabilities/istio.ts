@@ -55,7 +55,7 @@ function parseIngressClass(
   };
 }
 
-// TODO: do we create a custom resource for pepr for the "state store"
+// TODO: do we want to create a custom resource for pepr for the "state store"
 
 When(a.Ingress)
   .IsCreatedOrUpdated()
