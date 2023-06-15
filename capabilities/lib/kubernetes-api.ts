@@ -89,7 +89,6 @@ export class K8sAPI {
     );
 
     const { group, version, plural } = getGroupVersionPlural(VirtualService);
-
     try {
       const response = await this.k8sCustomObjectsApi.getNamespacedCustomObject(
         group,
@@ -132,7 +131,6 @@ export class K8sAPI {
     }
   }
 
-  // store for notes, delete later: istio-injection=disabled
   async labelNamespace(namespace: string, labels: { [key: string]: string }) {
     const patch = Object.keys(labels).map(key => ({
       op: "add",
@@ -171,7 +169,7 @@ export class K8sAPI {
     }
   }
 
-  async upsertGateway(ingress: V1Ingress, gatewayName: string) {
+  private ingressToGateway(ingress: V1Ingress, gatewayName: string): Gateway {
     if (!ingress.spec.rules || !ingress.spec.rules[0].host) {
       throw new Error("Ingress object is missing host in rules");
     }
@@ -181,7 +179,7 @@ export class K8sAPI {
       throw new Error("Wildcard hosts are not supported in gateways");
     }
 
-    const modifiedGateway = new Gateway({
+    return new Gateway({
       metadata: {
         name: gatewayName,
         namespace: ingress.metadata.namespace,
@@ -205,7 +203,10 @@ export class K8sAPI {
         ],
       },
     });
+  }
 
+  async upsertGateway(ingress: V1Ingress, gatewayName: string) {
+    const modifiedGateway = this.ingressToGateway(ingress, gatewayName);
     const { group, version, plural } = getGroupVersionPlural(Gateway);
     try {
       const response = await this.k8sCustomObjectsApi.getNamespacedCustomObject(
