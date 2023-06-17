@@ -31,7 +31,7 @@
     "test": "echo \"Test entrypoint goes here\""
   },
   "dependencies": {
-    "pepr": "0.7.0"
+    "pepr": "0.8.0"
   },
   "devDependencies": {
     "typescript": "5.0.4"
