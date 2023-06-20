@@ -1,6 +1,19 @@
 import { Capability, RegisterKind, a } from "pepr";
 import { K8sAPI } from "./lib/kubernetes-api";
 import { VirtualService } from "@kubernetes-models/istio/networking.istio.io/v1beta1";
+
+// TODO: how do we do metrics with pepr? we can't initialize the webhook here, it will block everything
+// TODO: figure out IIFE, also what should be in the core
+import { Metrics } from "./lib/metrics";
+const metrics = new Metrics();
+
+// XXX: BDW: This creates the exporter. right now very hard coded
+import { InstrumentationGRPC } from "./lib/traces";
+new InstrumentationGRPC().start();
+
+import { trace } from "@opentelemetry/api";
+const tracer = trace.getTracer("pepr-istio-capability");
+
 export const Istio = new Capability({
   name: "istio",
   description: "Istio service mesh capability.",
@@ -57,6 +70,11 @@ function parseIngressClass(
 
 // TODO: do we want to create a custom resource for pepr for the "state store"
 
+const myThingy = metrics.addThingy(
+  "create_or_update_ingress",
+  "Number of ingress objects created or updated"
+);
+
 When(a.Ingress)
   .IsCreatedOrUpdated()
   .Then(async ing => {
@@ -71,22 +89,47 @@ When(a.Ingress)
     if (ingressClass.gateway === undefined) {
       return;
     }
-    const k8s = new K8sAPI();
-    await k8s.labelNamespace(ing.Raw.metadata.namespace, {
-      "istio-injection": "enabled",
-    });
-    // TODO: if at this point in the deployment there are deployments and statefulsets created, they might need to be updated
-    try {
-      if (ingressClass.createGateway) {
-        await k8s.upsertGateway(ing.Raw, ingressClass.gateway);
-        ing.SetAnnotation("pepr.dev/istio-gateway", ingressClass.gateway);
+
+    await metrics.incThingy(myThingy);
+    //const span = tracer.startSpan("ingress.CreateOrUpdated");
+    await tracer.startActiveSpan("ingress.CreateOrUpdated", async span => {
+      span.setAttribute("namespace", ing.Raw.metadata.namespace);
+      span.setAttribute("name", ing.Raw.metadata.name);
+      span.setAttribute("labels", JSON.stringify(ingressClass));
+
+      // TODO: if at this point in the deployment there are deployments and statefulsets created, they might need to be updated
+
+      const k8s = new K8sAPI(tracer);
+      try {
+        await k8s.labelNamespace(ing.Raw.metadata.namespace, {
+          "istio-injection": "enabled",
+        });
+
+        if (ingressClass.createGateway) {
+          await k8s.upsertGateway(ing.Raw, ingressClass.gateway);
+          ing.SetAnnotation("istio-gateway.pepr.dev", ingressClass.gateway);
+        }
+        await k8s.upsertVirtualService(ing.Raw, ing.Raw.metadata.name);
+        ing.SetAnnotation(
+          "istio-virtualservice.pepr.dev",
+          ing.Raw.metadata.name
+        );
+        console.log(
+          "annotations: ",
+          JSON.stringify(ing.Raw.metadata.annotations, null, 2)
+        );
+      } catch (e) {
+        console.error("Failed to create or update VirtualService:", e);
+      } finally {
+        span.end();
       }
-      await k8s.upsertVirtualService(ing.Raw, ingressClass.gateway);
-      ing.SetAnnotation("pepr.dev/istio-virtualservice", ing.Raw.metadata.name);
-    } catch (e) {
-      console.error("Failed to create or update VirtualService:", e);
-    }
+    });
   });
+
+const myThingyDeleted = metrics.addThingy(
+  "delete_ingress",
+  "number of times the delete ingress is called"
+);
 
 When(a.Ingress)
   .IsDeleted()
@@ -95,21 +138,30 @@ When(a.Ingress)
     const namespace = ingress.metadata.namespace;
     const name = ingress.metadata.name;
 
-    const k8s = new K8sAPI();
-    try {
-      const ingress = ing.OldResource;
-      const gatewayName =
-        ingress.metadata?.annotations?.["pepr.dev/istio-gateway"];
-      const virtualServiceName =
-        ingress.metadata?.annotations?.["pepr.dev/istio-virtualservice"];
-      // TODO: unlabel namespace?
-      if (gatewayName !== undefined) {
-        await k8s.deleteGateway(namespace, gatewayName);
+    metrics.incThingy(myThingyDeleted);
+
+    await tracer.startActiveSpan("ingress.Deleted", async span => {
+      span.setAttribute("namespace", ingress.metadata.namespace);
+      span.setAttribute("name", ingress.metadata.name);
+
+      const k8s = new K8sAPI(tracer);
+      try {
+        const ingress = ing.OldResource;
+        const gatewayName =
+          ingress.metadata?.annotations?.["istio-gateway.pepr.dev"];
+        const virtualServiceName =
+          ingress.metadata?.annotations?.["istio-virtualservice.pepr.dev"];
+        // TODO: unlabel namespace?
+        if (gatewayName !== undefined) {
+          await k8s.deleteGateway(namespace, gatewayName);
+        }
+        if (virtualServiceName !== undefined) {
+          await k8s.deleteVirtualService(namespace, name);
+        }
+      } catch (e) {
+        console.error("Failed to create or update VirtualService:", e);
+      } finally {
+        span.end();
       }
-      if (virtualServiceName !== undefined) {
-        await k8s.deleteVirtualService(namespace, name);
-      }
-    } catch (e) {
-      console.error("Failed to create or update VirtualService:", e);
-    }
+    });
   });

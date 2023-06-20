@@ -16,25 +16,34 @@ type K8sModel = {
   apiVersion: string;
   kind: string;
 };
+
 function getGroupVersionPlural(model: K8sModel) {
   const [group, version] = model.apiVersion.split("/");
+  // TODO: this isn't perfect
   const plural = model.kind.toLocaleLowerCase() + "s";
   return { group, version, plural };
 }
+
+import { trace, Tracer, SpanStatusCode } from "@opentelemetry/api";
 
 export class K8sAPI {
   k8sApi: CoreV1Api;
   k8sAppsV1Api: AppsV1Api;
   k8sCustomObjectsApi: CustomObjectsApi;
   networkingV1Api: NetworkingV1Api;
-
-  constructor() {
+  tracer: Tracer;
+  constructor(tracer?: Tracer) {
     const kc = new KubeConfig();
     kc.loadFromDefault();
     this.k8sApi = kc.makeApiClient(CoreV1Api);
     this.k8sAppsV1Api = kc.makeApiClient(AppsV1Api);
     this.k8sCustomObjectsApi = kc.makeApiClient(CustomObjectsApi);
     this.networkingV1Api = kc.makeApiClient(NetworkingV1Api);
+    if (tracer) {
+      this.tracer = tracer;
+    } else {
+      tracer = trace.getTracer("pepr-istio-capability");
+    }
   }
 
   private ingressToVirtualService(
@@ -83,97 +92,104 @@ export class K8sAPI {
   }
 
   async upsertVirtualService(ingress: V1Ingress, gateway: string) {
-    const modifiedVirtualService = this.ingressToVirtualService(
-      ingress,
-      gateway
-    );
-
-    const { group, version, plural } = getGroupVersionPlural(VirtualService);
-    try {
-      const response = await this.k8sCustomObjectsApi.getNamespacedCustomObject(
-        group,
-        version,
-        modifiedVirtualService.metadata.namespace,
-        plural,
-        modifiedVirtualService.metadata.name
+    await this.tracer.startActiveSpan("upsertVirtualService", async span => {
+      span.setAttribute("ingressName", ingress.metadata.name);
+      span.setAttribute("gatewayName", gateway);
+      span.setAttribute("namespace", ingress.metadata.namespace);
+      const modifiedVirtualService = this.ingressToVirtualService(
+        ingress,
+        gateway
       );
 
-      // If the resource exists, update it
-      if (response && response.body) {
-        const object = new VirtualService(response.body);
-        object.spec = modifiedVirtualService.spec;
+      const { group, version, plural } = getGroupVersionPlural(VirtualService);
+      try {
+        const response =
+          await this.k8sCustomObjectsApi.getNamespacedCustomObject(
+            group,
+            version,
+            modifiedVirtualService.metadata.namespace,
+            plural,
+            modifiedVirtualService.metadata.name
+          );
 
-        await this.k8sCustomObjectsApi.replaceNamespacedCustomObject(
-          group,
-          version,
-          modifiedVirtualService.metadata.namespace,
-          plural,
-          modifiedVirtualService.metadata.name,
-          object,
-          undefined,
-          undefined,
-          undefined
-        );
+        // If the resource exists, update it
+        if (response && response.body) {
+          const object = new VirtualService(response.body);
+          object.spec = modifiedVirtualService.spec;
+
+          await this.k8sCustomObjectsApi.replaceNamespacedCustomObject(
+            group,
+            version,
+            modifiedVirtualService.metadata.namespace,
+            plural,
+            modifiedVirtualService.metadata.name,
+            object,
+            undefined,
+            undefined,
+            undefined
+          );
+        }
+      } catch (error) {
+        // If the resource doesn't exist, create it
+        if (error.response && error.response.statusCode === 404) {
+          await this.k8sCustomObjectsApi.createNamespacedCustomObject(
+            group,
+            version,
+            modifiedVirtualService.metadata.namespace,
+            plural,
+            modifiedVirtualService
+          );
+        } else {
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error.message,
+          });
+          throw error;
+        }
+      } finally {
+        span.end();
       }
-    } catch (error) {
-      // If the resource doesn't exist, create it
-      if (error.response && error.response.statusCode === 404) {
-        await this.k8sCustomObjectsApi.createNamespacedCustomObject(
-          group,
-          version,
-          modifiedVirtualService.metadata.namespace,
-          plural,
-          modifiedVirtualService
-        );
-      } else {
-        throw error;
-      }
-    }
+    });
   }
 
   async labelNamespace(namespace: string, labels: { [key: string]: string }) {
-    const patch = Object.keys(labels).map(key => ({
-      op: "add",
-      path: `/metadata/labels/${key}`,
-      value: labels[key],
-    }));
+    await this.tracer.startActiveSpan("labelNamespace", async span => {
+      span.setAttribute("namespace", namespace);
+      span.setAttribute("labels", JSON.stringify(labels));
 
-    await this.k8sApi.patchNamespace(
-      namespace,
-      patch,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { headers: { "Content-Type": "application/json-patch+json" } }
-    );
-  }
+      const patch = Object.keys(labels).map(key => ({
+        op: "add",
+        path: `/metadata/labels/${key}`,
+        value: labels[key],
+      }));
 
-  async getIngress(
-    namespace: string,
-    name: string
-  ): Promise<V1Ingress | undefined> {
-    try {
-      const response = await this.networkingV1Api.readNamespacedIngress(
-        name,
-        namespace
-      );
-      return response.body;
-    } catch (error) {
-      if (error.response && error.response.statusCode === 404) {
-        return;
-      } else {
+      try {
+        await this.k8sApi.patchNamespace(
+          namespace,
+          patch,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { headers: { "Content-Type": "application/json-patch+json" } }
+        );
+      } catch (error) {
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: error.message,
+        });
         throw error;
+      } finally {
+        span.end();
       }
-    }
+    });
   }
 
   private ingressToGateway(ingress: V1Ingress, gatewayName: string): Gateway {
     if (!ingress.spec.rules || !ingress.spec.rules[0].host) {
       throw new Error("Ingress object is missing host in rules");
     }
-
     const host = ingress.spec.rules[0].host;
     if (host.includes("*")) {
       throw new Error("Wildcard hosts are not supported in gateways");
@@ -206,80 +222,124 @@ export class K8sAPI {
   }
 
   async upsertGateway(ingress: V1Ingress, gatewayName: string) {
-    const modifiedGateway = this.ingressToGateway(ingress, gatewayName);
-    const { group, version, plural } = getGroupVersionPlural(Gateway);
-    try {
-      const response = await this.k8sCustomObjectsApi.getNamespacedCustomObject(
-        group,
-        version,
-        ingress.metadata.namespace,
-        plural,
-        gatewayName
-      );
+    await this.tracer.startActiveSpan("upsertGateway", async span => {
+      span.setAttribute("ingressName", ingress.metadata.name);
+      span.setAttribute("gatewayName", gatewayName);
+      span.setAttribute("namespace", ingress.metadata.namespace);
 
-      // If the resource exists, update it
-      if (response && response.body) {
-        const object = new Gateway(response.body);
-        object.spec = modifiedGateway.spec;
-        await this.k8sCustomObjectsApi.replaceNamespacedCustomObject(
-          group,
-          version,
-          ingress.metadata.namespace,
-          plural,
-          gatewayName,
-          object,
-          undefined,
-          undefined,
-          undefined
-        );
+      const modifiedGateway = this.ingressToGateway(ingress, gatewayName);
+      const { group, version, plural } = getGroupVersionPlural(Gateway);
+
+      try {
+        const response =
+          await this.k8sCustomObjectsApi.getNamespacedCustomObject(
+            group,
+            version,
+            ingress.metadata.namespace,
+            plural,
+            gatewayName
+          );
+
+        // If the resource exists, update it
+        if (response && response.body) {
+          const object = new Gateway(response.body);
+          object.spec = modifiedGateway.spec;
+
+          await this.k8sCustomObjectsApi.replaceNamespacedCustomObject(
+            group,
+            version,
+            ingress.metadata.namespace,
+            plural,
+            gatewayName,
+            object,
+            undefined,
+            undefined,
+            undefined
+          );
+        }
+      } catch (error) {
+        // If the resource doesn't exist, create it
+        if (error.response && error.response.statusCode === 404) {
+          try {
+            await this.k8sCustomObjectsApi.createNamespacedCustomObject(
+              group,
+              version,
+              ingress.metadata.namespace,
+              plural,
+              modifiedGateway
+            );
+          } catch (error) {
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message: error.message,
+            });
+            throw error;
+          }
+        } else {
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error.message,
+          });
+          throw error;
+        }
+      } finally {
+        span.end();
       }
-    } catch (error) {
-      // If the resource doesn't exist, create it
-      if (error.response && error.response.statusCode === 404) {
-        await this.k8sCustomObjectsApi.createNamespacedCustomObject(
-          group,
-          version,
-          ingress.metadata.namespace,
-          plural,
-          modifiedGateway
-        );
-      } else {
-        throw error;
-      }
-    }
+    });
   }
 
   async deleteVirtualService(namespace: string, name: string) {
-    const { group, version, plural } = getGroupVersionPlural(VirtualService);
-    try {
-      await this.k8sCustomObjectsApi.deleteNamespacedCustomObject(
-        group,
-        version,
-        namespace,
-        plural,
-        name
-      );
-    } catch (error) {
-      if (error.response && error.response.statusCode !== 404) {
-        throw error;
+    await this.tracer.startActiveSpan("deleteVirtualService", async span => {
+      span.setAttribute("name", name);
+      span.setAttribute("namespace", namespace);
+
+      const { group, version, plural } = getGroupVersionPlural(VirtualService);
+      try {
+        await this.k8sCustomObjectsApi.deleteNamespacedCustomObject(
+          group,
+          version,
+          namespace,
+          plural,
+          name
+        );
+      } catch (error) {
+        if (error.response && error.response.statusCode !== 404) {
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error.message,
+          });
+          throw error;
+        }
+      } finally {
+        span.end();
       }
-    }
+    });
   }
 
   async deleteGateway(namespace: string, name: string) {
-    const { group, version, plural } = getGroupVersionPlural(Gateway);
-    try {
-      await this.k8sCustomObjectsApi.deleteNamespacedCustomObject(
-        group,
-        version,
-        namespace,
-        plural,
-        name
-      );
-    } catch (error) {
-      if (error.response && error.response.statusCode !== 404) {
-        throw error;
+    await this.tracer.startActiveSpan("deleteGateway", async span => {
+      span.setAttribute("name", name);
+      span.setAttribute("namespace", namespace);
+      const { group, version, plural } = getGroupVersionPlural(Gateway);
+      try {
+        await this.k8sCustomObjectsApi.deleteNamespacedCustomObject(
+          group,
+          version,
+          namespace,
+          plural,
+          name
+        );
+      } catch (error) {
+        if (error.response && error.response.statusCode !== 404) {
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error.message,
+          });
+          throw error;
+        }
+      } finally {
+        span.end();
       }
-    }
+    });
   }
 }
