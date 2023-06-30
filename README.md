@@ -29,7 +29,6 @@ metadata:
   namespace: podinfo
   annotations:
     pepr.dev/gateway: istio-system/public-ingressgateway
-    pepr.dev/service: istio-system/public-ingress-service
 spec:
   ingressClassName: pepr-istio
   rules:
@@ -52,7 +51,8 @@ spec:
 ```yaml
   annotations:
     pepr.dev/gateway: podinfo
-    pepr.dev/service: istio-system/public-ingress-service
+    pepr.dev/ingress-selector: '{ "istio": "ingressgateway"}'
+
 ```
 2. [tls termination in Envoy] Create a new virtual service, use an existing gateway (and existing loadbalancer):
 ```
@@ -72,7 +72,7 @@ ingress:
 ingress:
   annotations:
     pepr.dev/gateway: podinfo
-    pepr.dev/service: istio-system/public-ingress-service
+    pepr.dev/ingress-selector: '{ "istio": "ingressgateway"}'
 ```
 2. kustomize, raw kubernetes manifest (see above yaml)
 

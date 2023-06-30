@@ -16,6 +16,7 @@ type K8sModel = {
   apiVersion: string;
   kind: string;
 };
+
 function getGroupVersionPlural(model: K8sModel) {
   const [group, version] = model.apiVersion.split("/");
   const plural = model.kind.toLocaleLowerCase() + "s";
@@ -37,78 +38,28 @@ export class K8sAPI {
     this.networkingV1Api = kc.makeApiClient(NetworkingV1Api);
   }
 
-  private ingressToVirtualService(
-    ingress: V1Ingress,
-    gateway: string
-  ): VirtualService {
-    const virtualService = new VirtualService({
-      metadata: {
-        name: ingress.metadata.name,
-        namespace: ingress.metadata.namespace,
-      },
-      spec: {
-        gateways: [gateway],
-        hosts: [],
-        http: [],
-      },
-    });
-
-    ingress.spec.rules.forEach(rule => {
-      if (rule.host) virtualService.spec.hosts.push(rule.host);
-      rule.http.paths.forEach(path => {
-        virtualService.spec.http.push({
-          match: [
-            {
-              uri: {
-                prefix: path.path,
-              },
-            },
-          ],
-          route: [
-            {
-              destination: {
-                host: path.backend?.service?.name,
-                port: {
-                  number: path.backend?.service?.port.number,
-                },
-              },
-            },
-          ],
-        });
-      });
-    });
-
-    virtualService.validate();
-    return virtualService;
-  }
-
-  async upsertVirtualService(ingress: V1Ingress, gateway: string) {
-    const modifiedVirtualService = this.ingressToVirtualService(
-      ingress,
-      gateway
-    );
-
+  async upsertVirtualService(virtualService: VirtualService) {
     const { group, version, plural } = getGroupVersionPlural(VirtualService);
     try {
       const response = await this.k8sCustomObjectsApi.getNamespacedCustomObject(
         group,
         version,
-        modifiedVirtualService.metadata.namespace,
+        virtualService.metadata.namespace,
         plural,
-        modifiedVirtualService.metadata.name
+        virtualService.metadata.name
       );
 
       // If the resource exists, update it
       if (response && response.body) {
         const object = new VirtualService(response.body);
-        object.spec = modifiedVirtualService.spec;
+        object.spec = virtualService.spec;
 
         await this.k8sCustomObjectsApi.replaceNamespacedCustomObject(
           group,
           version,
-          modifiedVirtualService.metadata.namespace,
+          virtualService.metadata.namespace,
           plural,
-          modifiedVirtualService.metadata.name,
+          virtualService.metadata.name,
           object,
           undefined,
           undefined,
@@ -121,9 +72,9 @@ export class K8sAPI {
         await this.k8sCustomObjectsApi.createNamespacedCustomObject(
           group,
           version,
-          modifiedVirtualService.metadata.namespace,
+          virtualService.metadata.namespace,
           plural,
-          modifiedVirtualService
+          virtualService
         );
       } else {
         throw error;
@@ -169,65 +120,28 @@ export class K8sAPI {
     }
   }
 
-  private ingressToGateway(ingress: V1Ingress, gatewayName: string): Gateway {
-    if (!ingress.spec.rules || !ingress.spec.rules[0].host) {
-      throw new Error("Ingress object is missing host in rules");
-    }
-
-    const host = ingress.spec.rules[0].host;
-    if (host.includes("*")) {
-      throw new Error("Wildcard hosts are not supported in gateways");
-    }
-
-    return new Gateway({
-      metadata: {
-        name: gatewayName,
-        namespace: ingress.metadata.namespace,
-      },
-      spec: {
-        selector: {
-          istio: "ingressgateway",
-        },
-        servers: [
-          {
-            port: {
-              number: 443,
-              name: "https",
-              protocol: "HTTPS",
-            },
-            hosts: [host],
-            tls: {
-              mode: "PASSTHROUGH",
-            },
-          },
-        ],
-      },
-    });
-  }
-
-  async upsertGateway(ingress: V1Ingress, gatewayName: string) {
-    const modifiedGateway = this.ingressToGateway(ingress, gatewayName);
+  async upsertGateway(gateway: Gateway) {
     const { group, version, plural } = getGroupVersionPlural(Gateway);
     try {
       const response = await this.k8sCustomObjectsApi.getNamespacedCustomObject(
         group,
         version,
-        ingress.metadata.namespace,
+        gateway.metadata.namespace,
         plural,
-        gatewayName
+        gateway.metadata.name
       );
 
       // If the resource exists, update it
       if (response && response.body) {
-        const object = new Gateway(response.body);
-        object.spec = modifiedGateway.spec;
+        const existingGateway = new Gateway(response.body);
+        existingGateway.spec = gateway.spec;
         await this.k8sCustomObjectsApi.replaceNamespacedCustomObject(
           group,
           version,
-          ingress.metadata.namespace,
+          existingGateway.metadata.namespace,
           plural,
-          gatewayName,
-          object,
+          existingGateway.metadata.name,
+          existingGateway,
           undefined,
           undefined,
           undefined
@@ -239,9 +153,9 @@ export class K8sAPI {
         await this.k8sCustomObjectsApi.createNamespacedCustomObject(
           group,
           version,
-          ingress.metadata.namespace,
+          gateway.metadata.namespace,
           plural,
-          modifiedGateway
+          gateway
         );
       } else {
         throw error;
@@ -249,8 +163,12 @@ export class K8sAPI {
     }
   }
 
-  async deleteVirtualService(namespace: string, name: string) {
-    const { group, version, plural } = getGroupVersionPlural(VirtualService);
+  private async deleteCustomObject(
+    model: K8sModel,
+    namespace: string,
+    name: string
+  ) {
+    const { group, version, plural } = getGroupVersionPlural(model);
     try {
       await this.k8sCustomObjectsApi.deleteNamespacedCustomObject(
         group,
@@ -266,20 +184,11 @@ export class K8sAPI {
     }
   }
 
+  async deleteVirtualService(namespace: string, name: string) {
+    return await this.deleteCustomObject(VirtualService, namespace, name);
+  }
+
   async deleteGateway(namespace: string, name: string) {
-    const { group, version, plural } = getGroupVersionPlural(Gateway);
-    try {
-      await this.k8sCustomObjectsApi.deleteNamespacedCustomObject(
-        group,
-        version,
-        namespace,
-        plural,
-        name
-      );
-    } catch (error) {
-      if (error.response && error.response.statusCode !== 404) {
-        throw error;
-      }
-    }
+    return await this.deleteCustomObject(Gateway, namespace, name);
   }
 }
