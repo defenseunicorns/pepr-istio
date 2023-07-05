@@ -2,7 +2,7 @@
   "name": "@pepr/istio",
   "license": "Apache-2.0",
   "repository": "defenseunicorns/pepr-istio",
-  "version": "0.0.1",
+  "version": "0.10.0",
   "description": "This capability supports automation related to the Istio Service Mesh",
   "engines": {
     "node": ">=18.0.0"
