@@ -2,18 +2,19 @@ import { a, PeprRequest } from "pepr";
 import { K8sAPI } from "./kubernetes-api";
 import {
   ingressToGateway,
-  ingressToVirtualService
+  ingressToVirtualService,
 } from "./ingress-conversion";
 
 export async function cleanupIngress(ingress: a.Ingress) {
-
   const namespace = ingress.metadata.namespace;
   const name = ingress.metadata.name;
 
   try {
     const k8s = new K8sAPI();
-    const gatewayName = ingress.metadata?.annotations?.["pepr.dev/istio-gateway"];
-    const virtualServiceName = ingress.metadata?.annotations?.["pepr.dev/istio-virtualservice"];
+    const gatewayName =
+      ingress.metadata?.annotations?.["pepr.dev/istio-gateway"];
+    const virtualServiceName =
+      ingress.metadata?.annotations?.["pepr.dev/istio-virtualservice"];
     // TODO: unlabel namespace?
     if (gatewayName !== undefined) {
       await k8s.deleteGateway(namespace, gatewayName);

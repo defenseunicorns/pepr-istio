@@ -15,10 +15,10 @@ When(a.Ingress)
     if (ing.Raw.spec?.ingressClassName !== "pepr-istio") {
       return;
     }
-    createIngress(ing)
+    createIngress(ing);
   });
 
-  When(a.Ingress)
+When(a.Ingress)
   .IsUpdated()
   .Then(async ing => {
     // if this object is set to deletion, ignore this
@@ -27,10 +27,9 @@ When(a.Ingress)
     }
     // TODO: Once the store is out, we'll store this info in there, and be able to validate what could be
     // mutated and what will need to change
-    cleanupIngress(ing.Raw)
-    createIngress(ing)
+    cleanupIngress(ing.Raw);
+    createIngress(ing);
   });
-
 
 When(a.Ingress)
   .IsDeleted()
