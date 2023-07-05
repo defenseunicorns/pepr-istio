@@ -1,4 +1,4 @@
-# Pepr Module for service mesh
+# Pepr Module for Istio (service mesh)
 
 This is a Pepr Module to implement the modifications to an application to inject istio into an application. 
 [Pepr](https://github.com/defenseunicorns/pepr) is a Kubernetes transformation system written in Typescript.
@@ -6,9 +6,9 @@ This is a Pepr Module to implement the modifications to an application to inject
 <br>
 
 ### The goal of this module/capability is to implement the changes to a deployed application needed:
-1. Enable the service mesh (side car injection)
+1. Enable the istio (side car injection)
 2. Create the virtual service for an applications
-3. Create the Gateway (If the application requires TLS passthrough to perform it's own SSO) 
+3. Create the Gateway (If the application requires TLS passthrough)
 
 <br>
 
@@ -72,7 +72,7 @@ ingress:
 ingress:
   annotations:
     pepr.dev/gateway: podinfo
-    pepr.dev/ingress-selector: '{ "istio": "ingressgateway"}'
+    pepr.dev/ingress-selector: '{"istio": "ingressgateway"}'
 ```
 2. kustomize, raw kubernetes manifest (see above yaml)
 
