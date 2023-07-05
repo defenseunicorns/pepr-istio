@@ -2,7 +2,7 @@
   "name": "@pepr/istio",
   "license": "Apache-2.0",
   "repository": "defenseunicorns/pepr-istio",
-  "version": "0.0.1",
+  "version": "0.10.0",
   "description": "This capability supports automation related to the Istio Service Mesh",
   "engines": {
     "node": ">=18.0.0"
@@ -31,7 +31,9 @@
     "test": "echo \"Test entrypoint goes here\""
   },
   "dependencies": {
-    "pepr": "0.9.0"
+    "@kubernetes-models/istio": "^2.3.0",
+    "@kubernetes/client-node": "^0.18.1",
+    "pepr": "^0.10.0"
   },
   "devDependencies": {
     "typescript": "5.0.4"
