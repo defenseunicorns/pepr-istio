@@ -26,6 +26,7 @@ export async function cleanupIngress(ingress: a.Ingress) {
     console.error("Failed to cleanup ingress", e);
   }
 }
+
 export async function createIngress(ing: PeprRequest<a.Ingress>) {
   if (ing.Raw.spec?.ingressClassName !== "pepr-istio") {
     return;

@@ -87,6 +87,7 @@ Module Root
 └── capabilities
     ├── istio.ts
     └── lib
-        └── kubernetes-api.ts
-
+        ├── create-ingress.ts
+        ├── kubernetes-api.ts
+        └── ingress-conversion.ts
 ```

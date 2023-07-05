@@ -1,11 +1,11 @@
 import { Capability, a } from "pepr";
+import { createIngress, cleanupIngress } from "./lib/create-ingress";
 
 export const Istio = new Capability({
   name: "istio",
   description: "Istio service mesh capability.",
   namespaces: [],
 });
-import { createIngress, cleanupIngress } from "./lib/createIngress";
 
 const { When } = Istio;
 
