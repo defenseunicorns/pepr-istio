@@ -33,7 +33,7 @@
   "dependencies": {
     "@kubernetes-models/istio": "^2.3.0",
     "@kubernetes/client-node": "^0.18.1",
-    "pepr": "^0.10.0"
+    "pepr": "^0.10.1"
   },
   "devDependencies": {
     "typescript": "5.0.4"
