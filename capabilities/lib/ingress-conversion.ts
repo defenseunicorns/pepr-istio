@@ -1,5 +1,4 @@
-import { V1Ingress } from "@kubernetes/client-node";
-import { Log } from "pepr";
+import { k8s, Log } from "pepr";
 
 import {
   VirtualService,
@@ -23,7 +22,9 @@ function parseSelector(text: string) {
   return { istio: "ingressgateway" };
 }
 
-export function ingressToVirtualService(ingress: V1Ingress): VirtualService {
+export function ingressToVirtualService(
+  ingress: k8s.V1Ingress
+): VirtualService {
   const gateway = ingress.metadata?.annotations?.["pepr.dev/gateway"];
   if (gateway === undefined) {
     return null;
@@ -44,13 +45,6 @@ export function ingressToVirtualService(ingress: V1Ingress): VirtualService {
     if (rule.host) virtualService.spec.hosts.push(rule.host);
     rule.http.paths.forEach(path => {
       virtualService.spec.http.push({
-        match: [
-          {
-            uri: {
-              prefix: path.path,
-            },
-          },
-        ],
         route: [
           {
             destination: {
@@ -70,7 +64,7 @@ export function ingressToVirtualService(ingress: V1Ingress): VirtualService {
 }
 
 // this will return a gateway object if neces
-export function ingressToGateway(ingress: V1Ingress): Gateway {
+export function ingressToGateway(ingress: k8s.V1Ingress): Gateway {
   const gateway = ingress.metadata?.annotations?.["pepr.dev/gateway"];
   if (gateway === undefined) {
     return null;

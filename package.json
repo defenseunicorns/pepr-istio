@@ -26,7 +26,7 @@
     }
   },
   "scripts": {
-    "build": "rm -fr dist && pepr build -e index.ts",
+    "build": "rm -fr dist && npx pepr build -e index.ts",
     "k3d-setup": "k3d cluster delete pepr-dev && k3d cluster create pepr-dev --k3s-arg '--debug@server:0'",
     "test": "echo \"Test entrypoint goes here\""
   },

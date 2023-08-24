@@ -1,4 +1,4 @@
-import { a, PeprRequest } from "pepr";
+import { a, PeprRequest, Log } from "pepr";
 import { K8sAPI } from "./kubernetes-api";
 import {
   ingressToGateway,
@@ -23,7 +23,7 @@ export async function cleanupIngress(ingress: a.Ingress) {
       await k8s.deleteVirtualService(namespace, name);
     }
   } catch (e) {
-    console.error("Failed to cleanup ingress", e);
+    Log.error("Failed to cleanup ingress", e);
   }
 }
 
@@ -50,6 +50,6 @@ export async function createIngress(ing: PeprRequest<a.Ingress>) {
 
     // TODO: if at this point in the deployment there are deployments and statefulsets created, they might need to be updated
   } catch (e) {
-    console.error("Failed to create Istio VirtualService/Gateway:", e);
+    Log.error("Failed to create Istio VirtualService/Gateway:", e);
   }
 }

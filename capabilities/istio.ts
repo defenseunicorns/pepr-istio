@@ -1,6 +1,7 @@
-import { Capability, a } from "pepr";
+import { Capability, Log, a } from "pepr";
 import { createIngress, cleanupIngress } from "./lib/create-ingress";
-
+import { convertServiceToVirtualService } from "./lib/service-to-virtualservice";
+import { K8sAPI } from "./lib/kubernetes-api";
 export const Istio = new Capability({
   name: "istio",
   description: "Istio service mesh capability.",
@@ -8,6 +9,8 @@ export const Istio = new Capability({
 });
 
 const { When } = Istio;
+
+// TODO: might need to roll the deployment.
 
 When(a.Ingress)
   .IsCreated()
@@ -38,4 +41,28 @@ When(a.Ingress)
       return;
     }
     cleanupIngress(ing.OldResource);
+  });
+
+When(a.Service)
+  .IsCreatedOrUpdated()
+  .Then(async svc => {
+    // XXX: BDW: which gateway to use? also how do we want to construct the hostname?
+
+    // TODO: update with ownerReferences in Validate and use ownerReferences to manage the lifecycle of the virtualservice
+    try {
+      const vs = convertServiceToVirtualService(
+        svc.Raw,
+        "istio-system/tenant",
+        `${svc.Raw.metadata.name}.bigbang.dev`
+      );
+      if (vs !== undefined) {
+        const k8s = new K8sAPI();
+        await k8s.upsertVirtualService(vs);
+      }
+    } catch (err) {
+      Log.error(
+        `Failed to convert service to virtual service: ${err}`,
+        "ServiceToVirtualService"
+      );
+    }
   });

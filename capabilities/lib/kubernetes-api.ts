@@ -1,11 +1,4 @@
-import {
-  AppsV1Api,
-  CoreV1Api,
-  CustomObjectsApi,
-  KubeConfig,
-  V1Ingress,
-  NetworkingV1Api,
-} from "@kubernetes/client-node";
+import { k8s } from "pepr";
 
 import {
   VirtualService,
@@ -24,18 +17,18 @@ function getGroupVersionPlural(model: K8sModel) {
 }
 
 export class K8sAPI {
-  k8sApi: CoreV1Api;
-  k8sAppsV1Api: AppsV1Api;
-  k8sCustomObjectsApi: CustomObjectsApi;
-  networkingV1Api: NetworkingV1Api;
+  k8sApi: k8s.CoreV1Api;
+  k8sAppsV1Api: k8s.AppsV1Api;
+  k8sCustomObjectsApi: k8s.CustomObjectsApi;
+  networkingV1Api: k8s.NetworkingV1Api;
 
   constructor() {
-    const kc = new KubeConfig();
+    const kc = new k8s.KubeConfig();
     kc.loadFromDefault();
-    this.k8sApi = kc.makeApiClient(CoreV1Api);
-    this.k8sAppsV1Api = kc.makeApiClient(AppsV1Api);
-    this.k8sCustomObjectsApi = kc.makeApiClient(CustomObjectsApi);
-    this.networkingV1Api = kc.makeApiClient(NetworkingV1Api);
+    this.k8sApi = kc.makeApiClient(k8s.CoreV1Api);
+    this.k8sAppsV1Api = kc.makeApiClient(k8s.AppsV1Api);
+    this.k8sCustomObjectsApi = kc.makeApiClient(k8s.CustomObjectsApi);
+    this.networkingV1Api = kc.makeApiClient(k8s.NetworkingV1Api);
   }
 
   async upsertVirtualService(virtualService: VirtualService) {
@@ -104,7 +97,7 @@ export class K8sAPI {
   async getIngress(
     namespace: string,
     name: string
-  ): Promise<V1Ingress | undefined> {
+  ): Promise<k8s.V1Ingress | undefined> {
     try {
       const response = await this.networkingV1Api.readNamespacedIngress(
         name,
