@@ -28,14 +28,25 @@
   "scripts": {
     "build": "rm -fr dist && npx pepr build -e index.ts",
     "k3d-setup": "k3d cluster delete pepr-dev && k3d cluster create pepr-dev --k3s-arg '--debug@server:0'",
-    "test": "echo \"Test entrypoint goes here\""
+    "test": "ava"
   },
   "dependencies": {
     "@kubernetes-models/istio": "^2.3.0",
-    "@kubernetes/client-node": "^0.18.1",
-    "pepr": "^0.12.1"
+    "ava": "^5.3.1",
+    "pepr": "^0.12.2",
+    "ts-node": "^10.9.1"
   },
   "devDependencies": {
     "typescript": "5.0.4"
+  },
+  "ava": {
+    "extensions": [
+      "ts"
+    ],
+    "require": [
+      "ts-node/register"
+    ],
+    "failFast": true,
+    "verbose": true
   }
 }
