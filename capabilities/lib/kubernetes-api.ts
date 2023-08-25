@@ -1,9 +1,6 @@
 import { k8s } from "pepr";
 
-import {
-  VirtualService,
-  Gateway,
-} from "@kubernetes-models/istio/networking.istio.io/v1beta1";
+import { VirtualService } from "@kubernetes-models/istio/networking.istio.io/v1beta1";
 
 type K8sModel = {
   apiVersion: string;
@@ -113,55 +110,30 @@ export class K8sAPI {
     }
   }
 
-  async upsertGateway(gateway: Gateway) {
-    const { group, version, plural } = getGroupVersionPlural(Gateway);
-    try {
-      const response = await this.k8sCustomObjectsApi.getNamespacedCustomObject(
-        group,
-        version,
-        gateway.metadata.namespace,
-        plural,
-        gateway.metadata.name
-      );
+  async checksumDeployment(name: string, namespace: string, checksum: string) {
+    const patch = [
+      {
+        op: "add",
+        path: "/spec/template/metadata/annotations/pepr.dev~1checksum",
+        value: checksum,
+      },
+    ];
 
-      // If the resource exists, update it
-      if (response && response.body) {
-        const existingGateway = new Gateway(response.body);
-        existingGateway.spec = gateway.spec;
-        await this.k8sCustomObjectsApi.replaceNamespacedCustomObject(
-          group,
-          version,
-          existingGateway.metadata.namespace,
-          plural,
-          existingGateway.metadata.name,
-          existingGateway,
-          undefined,
-          undefined,
-          undefined
-        );
-      }
-    } catch (error) {
-      // If the resource doesn't exist, create it
-      if (error.response && error.response.statusCode === 404) {
-        await this.k8sCustomObjectsApi.createNamespacedCustomObject(
-          group,
-          version,
-          gateway.metadata.namespace,
-          plural,
-          gateway
-        );
-      } else {
-        throw error;
-      }
-    }
+    await this.k8sAppsV1Api.patchNamespacedDeployment(
+      name,
+      namespace,
+      patch,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { headers: { "content-type": "application/json-patch+json" } }
+    );
   }
 
-  private async deleteCustomObject(
-    model: K8sModel,
-    namespace: string,
-    name: string
-  ) {
-    const { group, version, plural } = getGroupVersionPlural(model);
+  async deleteVirtualService(namespace: string, name: string) {
+    const { group, version, plural } = getGroupVersionPlural(VirtualService);
     try {
       await this.k8sCustomObjectsApi.deleteNamespacedCustomObject(
         group,
@@ -177,11 +149,36 @@ export class K8sAPI {
     }
   }
 
-  async deleteVirtualService(namespace: string, name: string) {
-    return await this.deleteCustomObject(VirtualService, namespace, name);
-  }
+  async restartAppsWithoutIstioSidecar(namespace: string) {
+    const { body: pods } = await this.k8sApi.listNamespacedPod(namespace);
+    const restartedDeployments = new Set<string>();
 
-  async deleteGateway(namespace: string, name: string) {
-    return await this.deleteCustomObject(Gateway, namespace, name);
+    for (const pod of pods.items) {
+      const hasIstioProxy = pod.spec?.containers?.some(
+        container => container.name === "istio-proxy"
+      );
+
+      if (!hasIstioProxy) {
+        const ownerReferences = pod.metadata?.ownerReferences || [];
+        const deploymentOwner = ownerReferences.find(
+          or => or.kind === "Deployment"
+        );
+        // For statefulsets, just delete the pod one at a time.
+        const stsOwner = ownerReferences.find(or => or.kind === "StatefulSet");
+        if (stsOwner?.name) {
+          await this.k8sApi.deleteNamespacedPod(pod.metadata.name, namespace);
+        } else if (
+          deploymentOwner?.name &&
+          !restartedDeployments.has(deploymentOwner.name)
+        ) {
+          await this.checksumDeployment(
+            deploymentOwner.name,
+            namespace,
+            "checksum"
+          );
+          restartedDeployments.add(deploymentOwner.name);
+        }
+      }
+    }
   }
 }

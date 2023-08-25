@@ -1,7 +1,7 @@
 import { k8s } from "pepr";
 import { VirtualService } from "@kubernetes-models/istio/networking.istio.io/v1beta1";
 
-export { convertServiceToVirtualService };
+export { serviceToVirtualService, extractPort };
 
 /**
  * Extracts a valid port number from a given Kubernetes Service.
@@ -60,7 +60,7 @@ function extractPort(service: k8s.V1Service): number | undefined {
  *
  * @throws {Error} Throws an error if the service does not have necessary metadata or spec.
  */
-function convertServiceToVirtualService(
+function serviceToVirtualService(
   service: k8s.V1Service,
   gateway: string,
   hostname: string
@@ -99,8 +99,6 @@ function convertServiceToVirtualService(
     },
   });
 
-  // Validate the created VirtualService object before returning it
   virtualService.validate();
-
   return virtualService;
 }
