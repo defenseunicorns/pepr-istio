@@ -3,7 +3,7 @@ import { ingressToVirtualService } from "./ingress-to-virtualservice"; // Replac
 import { k8s } from "pepr"; // Replace with the actual import
 
 test("ingressToVirtualService should create VirtualService with all fields", t => {
-  const ingress = {
+  const ingress: k8s.V1Ingress = {
     metadata: {
       name: "test-ingress",
       annotations: { "pepr.dev/gateway": "custom-gateway" },

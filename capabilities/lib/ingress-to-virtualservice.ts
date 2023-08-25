@@ -3,8 +3,8 @@ import { VirtualService } from "@kubernetes-models/istio/networking.istio.io/v1b
 
 export function ingressToVirtualService(
   ingress: k8s.V1Ingress,
-  defaultGateway: string = "istio-system/tenant"
-): VirtualService {
+  defaultGateway = "istio-system/tenant"
+) {
   const gateway =
     ingress.metadata?.annotations?.["pepr.dev/gateway"] || defaultGateway;
 
