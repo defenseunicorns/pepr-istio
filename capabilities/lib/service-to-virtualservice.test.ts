@@ -37,7 +37,7 @@ test("extractPort should throw an error for multiple valid ports", t => {
   const error = t.throws(() => extractPort(service));
   t.is(
     error.message,
-    "Ambiguous ports: More than one TCP port 80 or 443 is specified"
+    "Ambiguous ports: More than one TCP port 80 or 443 is specified",
   );
 });
 
@@ -78,7 +78,7 @@ test("serviceToVirtualService should throw an error for missing metadata or spec
     },
   };
   const error = t.throws(() =>
-    serviceToVirtualService(service, "gateway", "hostname")
+    serviceToVirtualService(service, "gateway", "hostname"),
   );
   t.is(error.message, "Invalid V1Service provided");
 });

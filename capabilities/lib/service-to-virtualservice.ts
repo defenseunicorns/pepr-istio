@@ -29,14 +29,14 @@ function extractPort(service: k8s.V1Service): number | undefined {
   // Filter ports to only include TCP ports 80 or 443
   const filteredPorts = service.spec.ports.filter(
     (port: k8s.V1ServicePort) =>
-      (port.port === 80 || port.port === 443) && port.protocol === "TCP"
+      (port.port === 80 || port.port === 443) && port.protocol === "TCP",
   );
   if (filteredPorts.length === 0) {
     return undefined;
   }
   if (filteredPorts.length > 1) {
     throw new Error(
-      "Ambiguous ports: More than one TCP port 80 or 443 is specified"
+      "Ambiguous ports: More than one TCP port 80 or 443 is specified",
     );
   }
   return filteredPorts[0].port;
@@ -63,7 +63,7 @@ function extractPort(service: k8s.V1Service): number | undefined {
 function serviceToVirtualService(
   service: k8s.V1Service,
   gateway: string,
-  hostname: string
+  hostname: string,
 ): VirtualService | undefined {
   // Validate the provided Kubernetes Service object
   if (!service.metadata?.name || !service.spec?.ports) {
@@ -98,6 +98,16 @@ function serviceToVirtualService(
       ],
     },
   });
+
+  if (service.metadata?.uid) {
+    const ownerReference: k8s.V1OwnerReference = {
+      apiVersion: service.apiVersion,
+      uid: service.metadata.uid,
+      kind: service.kind,
+      name: service.metadata.name,
+    };
+    virtualService.metadata.ownerReferences = [ownerReference];
+  }
 
   virtualService.validate();
   return virtualService;

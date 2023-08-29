@@ -36,7 +36,7 @@ export class K8sAPI {
         version,
         virtualService.metadata.namespace,
         plural,
-        virtualService.metadata.name
+        virtualService.metadata.name,
       );
 
       // If the resource exists, update it
@@ -53,7 +53,7 @@ export class K8sAPI {
           object,
           undefined,
           undefined,
-          undefined
+          undefined,
         );
       }
     } catch (error) {
@@ -64,7 +64,7 @@ export class K8sAPI {
           version,
           virtualService.metadata.namespace,
           plural,
-          virtualService
+          virtualService,
         );
       } else {
         throw error;
@@ -87,18 +87,18 @@ export class K8sAPI {
       undefined,
       undefined,
       undefined,
-      { headers: { "Content-Type": "application/json-patch+json" } }
+      { headers: { "Content-Type": "application/json-patch+json" } },
     );
   }
 
   async getIngress(
     namespace: string,
-    name: string
+    name: string,
   ): Promise<k8s.V1Ingress | undefined> {
     try {
       const response = await this.networkingV1Api.readNamespacedIngress(
         name,
-        namespace
+        namespace,
       );
       return response.body;
     } catch (error) {
@@ -128,7 +128,7 @@ export class K8sAPI {
       undefined,
       undefined,
       undefined,
-      { headers: { "content-type": "application/json-patch+json" } }
+      { headers: { "content-type": "application/json-patch+json" } },
     );
   }
 
@@ -140,7 +140,7 @@ export class K8sAPI {
         version,
         namespace,
         plural,
-        name
+        name,
       );
     } catch (error) {
       if (error.response && error.response.statusCode !== 404) {
@@ -155,13 +155,13 @@ export class K8sAPI {
 
     for (const pod of pods.items) {
       const hasIstioProxy = pod.spec?.containers?.some(
-        container => container.name === "istio-proxy"
+        container => container.name === "istio-proxy",
       );
 
       if (!hasIstioProxy) {
         const ownerReferences = pod.metadata?.ownerReferences || [];
         const deploymentOwner = ownerReferences.find(
-          or => or.kind === "Deployment"
+          or => or.kind === "Deployment",
         );
         // For statefulsets, just delete the pod one at a time.
         const stsOwner = ownerReferences.find(or => or.kind === "StatefulSet");
@@ -174,7 +174,7 @@ export class K8sAPI {
           await this.checksumDeployment(
             deploymentOwner.name,
             namespace,
-            "checksum"
+            "checksum",
           );
           restartedDeployments.add(deploymentOwner.name);
         }

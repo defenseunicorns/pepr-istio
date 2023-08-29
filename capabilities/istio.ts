@@ -1,4 +1,4 @@
-import { Capability, Log, a } from "pepr";
+import { Capability, a } from "pepr";
 import { ingressToVirtualService } from "./lib/ingress-to-virtualservice";
 import { serviceToVirtualService } from "./lib/service-to-virtualservice";
 import { K8sAPI } from "./lib/kubernetes-api";
@@ -10,20 +10,15 @@ export const Istio = new Capability({
 
 const { When } = Istio;
 
-// TODO:
-// 1. add deployment rolling.
-// 2. add ownerReferences to the VirtualService to manage the lifecycle.
-
+// TODO: figure
 const defaultTenantGateway = "istio-system/tenant";
 const defaultDomain = "bigbang.dev";
 
-// TODO: add code to roll deployment
-
 When(a.Ingress)
   .IsCreatedOrUpdated()
-  .Then(async ing => {
+  .Validate(async ing => {
     if (ing.Raw.spec?.ingressClassName !== "pepr-istio") {
-      return;
+      return ing.Approve();
     }
 
     try {
@@ -38,17 +33,16 @@ When(a.Ingress)
       }
       await k8s.restartAppsWithoutIstioSidecar(ing.Raw.metadata.namespace);
     } catch (err) {
-      Log.error(
-        `Failed to convert service to virtual service: ${err}`,
-        "IngressToVirtualService"
+      return ing.Deny(
+        `IngressToVirtualService: Failed to convert service to virtual service: ${err}`,
       );
     }
+    return ing.Approve();
   });
 
 When(a.Service)
   .IsCreatedOrUpdated()
-  .Then(async svc => {
-    // TODO: update with ownerReferences in Validate and use ownerReferences to manage the lifecycle of the virtualservice
+  .Validate(async svc => {
     try {
       const k8s = new K8sAPI();
       await k8s.labelNamespace(svc.Raw.metadata.namespace, {
@@ -58,7 +52,7 @@ When(a.Service)
       const vs = serviceToVirtualService(
         svc.Raw,
         defaultTenantGateway,
-        `${svc.Raw.metadata.name}.${defaultDomain}`
+        `${svc.Raw.metadata.name}.${defaultDomain}`,
       );
       if (vs !== undefined) {
         await k8s.upsertVirtualService(vs);
@@ -66,9 +60,9 @@ When(a.Service)
 
       await k8s.restartAppsWithoutIstioSidecar(svc.Raw.metadata.namespace);
     } catch (err) {
-      Log.error(
-        `Failed to convert service to virtual service: ${err}`,
-        "ServiceToVirtualService"
+      return svc.Deny(
+        `ServiceToVirtualService: Failed to convert service to virtual service: ${err}`,
       );
     }
+    return svc.Approve();
   });
