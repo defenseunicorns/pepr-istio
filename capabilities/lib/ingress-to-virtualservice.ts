@@ -20,6 +20,7 @@ export function ingressToVirtualService(
     },
   });
 
+  /* Not Guaranteed that the object is persisted yet. Watch() will fix this
   if (ingress.metadata?.uid) {
     const ownerReference: k8s.V1OwnerReference = {
       apiVersion: ingress.apiVersion,
@@ -29,6 +30,7 @@ export function ingressToVirtualService(
     };
     virtualService.metadata.ownerReferences = [ownerReference];
   }
+  */
 
   ingress.spec.rules.forEach(rule => {
     if (rule.host) virtualService.spec.hosts.push(rule.host);

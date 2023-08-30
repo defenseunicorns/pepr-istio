@@ -99,6 +99,8 @@ function serviceToVirtualService(
     },
   });
 
+  /* Not Guaranteed that the object is persisted yet. Watch() will fix this
+
   if (service.metadata?.uid) {
     const ownerReference: k8s.V1OwnerReference = {
       apiVersion: service.apiVersion,
@@ -108,6 +110,7 @@ function serviceToVirtualService(
     };
     virtualService.metadata.ownerReferences = [ownerReference];
   }
+  */
 
   virtualService.validate();
   return virtualService;

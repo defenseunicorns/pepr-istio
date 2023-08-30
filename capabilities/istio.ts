@@ -10,10 +10,12 @@ export const Istio = new Capability({
 
 const { When } = Istio;
 
-// TODO: figure
+// TODO: figure out where to store these defaults
 const defaultTenantGateway = "istio-system/tenant";
 const defaultDomain = "bigbang.dev";
 
+// TODO: when Watch() exists, use it instead so we know the object is persisted 
+//       before we try to make it an ownerReference of the children objects
 When(a.Ingress)
   .IsCreatedOrUpdated()
   .Validate(async ing => {
@@ -66,3 +68,4 @@ When(a.Service)
     }
     return svc.Approve();
   });
+
