@@ -14,7 +14,7 @@ const { When } = Istio;
 const defaultTenantGateway = "istio-system/tenant";
 const defaultDomain = "bigbang.dev";
 
-// TODO: when Watch() exists, use it instead so we know the object is persisted 
+// TODO: when Watch() exists, use it instead so we know the object is persisted
 //       before we try to make it an ownerReference of the children objects
 When(a.Ingress)
   .IsCreatedOrUpdated()
@@ -68,4 +68,3 @@ When(a.Service)
     }
     return svc.Approve();
   });
-
