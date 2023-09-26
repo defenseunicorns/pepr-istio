@@ -33,7 +33,7 @@
   "dependencies": {
     "@kubernetes-models/istio": "^2.3.0",
     "ava": "^5.3.1",
-    "pepr": "^0.13.2",
+    "pepr": "^0.13.4",
     "ts-node": "^10.9.1"
   },
   "ava": {
