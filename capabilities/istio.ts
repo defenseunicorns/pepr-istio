@@ -12,18 +12,11 @@ export const Istio = new Capability({
 
 const { When, Store } = Istio;
 
-
 Store.onReady(data => {
   Log.info(data, "Pepr Store Ready");
   Store.setItem("tenantGateway", "istio-system/tenant");
   Store.setItem("domain", "bigbang.dev");
 });
-
-When(a.Namespace)
-  .IsCreated()
-  .Watch(async ns => {
-    Log.info(`Istio: Namespace ${ns.metadata.name} created`);
-  });
 
 When(a.Ingress)
   .IsCreatedOrUpdated()
@@ -34,18 +27,22 @@ When(a.Ingress)
 
     try {
       await K8sAPI.labelNamespaceForIstio(ing.metadata.namespace);
-      const vs = ingressToVirtualService(ing, Store.getItem("tenantGateway"));
+      const gateway =
+        Store.getItem("tenantGateway") || "istio-system/tenant-todo-fixme";
+      const vs = ingressToVirtualService(ing, gateway);
       if (vs !== undefined) {
-        await K8s(VirtualService).Create(vs);
+        await K8s(VirtualService).Apply(vs);
       }
       await K8sAPI.restartAppsWithoutIstioSidecar(ing.metadata.namespace);
+      Log.info(
+        `IngressToVirtualService: Successfully converted ingress to virtual service: ${ing.metadata.name}`,
+      );
     } catch (err) {
       Log.error(
-        `IngressToVirtualService: Failed to convert service to virtual service: ${err.response}`,
+        `IngressToVirtualService: Failed to convert service to virtual service: ${err.data?.message}`,
       );
     }
   });
-
 
 // TODO: validate this even makes sense, possibly populate stuff from the pepr store to generate this properly.
 When(a.Service)
@@ -65,7 +62,9 @@ When(a.Service)
       await K8sAPI.restartAppsWithoutIstioSidecar(svc.metadata.namespace);
     } catch (err) {
       Log.error(
-        `ServiceToVirtualService: Failed to convert service to virtual service: ${err}`,
+        `ServiceToVirtualService: Failed to convert service to virtual service: ${JSON.stringify(
+          err,
+        )}`,
       );
     }
   });

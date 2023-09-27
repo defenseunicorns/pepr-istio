@@ -1,8 +1,7 @@
 // TODO: Work in progress:
 // 1. Get V1ObjectMeta from pepr's kind (should be exported from the fluent API)
-// 2. Automate generation of this from a CRD, will work on this later, it's very useful. 
-// 3. fix the constructor so I don't need to use any
-// 4. the RegisterKind call should be automated as part of the auto-generation
+// 2. Automate generation of this from a CRD, will work on this later, it's very useful.
+// 3. the RegisterKind call should be automated as part of the auto-generation
 
 import { V1ObjectMeta } from "@kubernetes/client-node";
 import { RegisterKind } from "pepr";
@@ -371,7 +370,7 @@ export class VirtualService {
     }[];
   };
   status?: Record<string, never>;
-  constructor(input?: any) {
+  constructor(input?: Partial<VirtualService>) {
     this.apiVersion = input.apiVersion || "networking.istio.io/v1alpha3";
     this.kind = input.kind || "VirtualService";
     this.metadata = input?.metadata;

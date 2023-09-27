@@ -33,7 +33,7 @@
   "dependencies": {
     "@kubernetes/client-node": "^1.0.0-rc3",
     "ava": "^5.3.1",
-    "kubernetes-fluent-client": "^1.3.0",
+    "kubernetes-fluent-client": "^1.3.2",
     "pepr": "../pepr/pepr-0.0.0-development.tgz",
     "ts-node": "^10.9.1"
   },
