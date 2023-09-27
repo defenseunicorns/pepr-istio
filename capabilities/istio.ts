@@ -10,12 +10,14 @@ export const Istio = new Capability({
   namespaces: [],
 });
 
-const { When } = Istio;
+const { When, Store } = Istio;
 
-// TODO: put these in the pepr store
-// TODO: figure out where to store these defaults
-const defaultTenantGateway = "istio-system/tenant";
-const defaultDomain = "bigbang.dev";
+
+Store.onReady(data => {
+  Log.info(data, "Pepr Store Ready");
+  Store.setItem("tenantGateway", "istio-system/tenant");
+  Store.setItem("domain", "bigbang.dev");
+});
 
 When(a.Namespace)
   .IsCreated()
@@ -32,7 +34,7 @@ When(a.Ingress)
 
     try {
       await K8sAPI.labelNamespaceForIstio(ing.metadata.namespace);
-      const vs = ingressToVirtualService(ing, defaultTenantGateway);
+      const vs = ingressToVirtualService(ing, Store.getItem("tenantGateway"));
       if (vs !== undefined) {
         await K8s(VirtualService).Create(vs);
       }
@@ -54,8 +56,8 @@ When(a.Service)
       await K8sAPI.labelNamespaceForIstio(svc.metadata.namespace);
       const vs = serviceToVirtualService(
         svc,
-        defaultTenantGateway,
-        `${svc.metadata.name}.${defaultDomain}`,
+        Store.getItem("tenantGateway"),
+        `${svc.metadata.name}.${Store.getItem("domain")}`,
       );
       if (vs !== undefined) {
         await K8s(VirtualService).Apply(vs);
