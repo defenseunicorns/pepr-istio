@@ -1,9 +1,9 @@
 import test from "ava";
 import { ingressToVirtualService } from "./ingress-to-virtualservice"; // Replace with the actual import
-import { k8s } from "pepr"; // Replace with the actual import
+import { kind } from "pepr"; // Replace with the actual import
 
 test("ingressToVirtualService should create VirtualService with all fields", t => {
-  const ingress: k8s.V1Ingress = {
+  const ingress: kind.Ingress = {
     metadata: {
       name: "test-ingress",
       annotations: { "pepr.dev/gateway": "custom-gateway" },
@@ -34,7 +34,6 @@ test("ingressToVirtualService should create VirtualService with all fields", t =
     },
   };
   const vs = ingressToVirtualService(ingress);
-  vs.validate();
   t.is(vs.metadata.name, "test-ingress");
   t.is(vs.spec.gateways[0], "custom-gateway");
   t.is(vs.spec.hosts[0], "example.com");
@@ -42,7 +41,7 @@ test("ingressToVirtualService should create VirtualService with all fields", t =
 });
 
 test("ingressToVirtualService should use default gateway when annotation is missing", t => {
-  const ingress: k8s.V1Ingress = {
+  const ingress: kind.Ingress = {
     metadata: {
       name: "test-ingress",
     },
@@ -56,7 +55,7 @@ test("ingressToVirtualService should use default gateway when annotation is miss
 });
 
 test("ingressToVirtualService should handle ingress without hosts", t => {
-  const ingress: k8s.V1Ingress = {
+  const ingress: kind.Ingress = {
     metadata: {
       name: "test-ingress",
     },
@@ -70,7 +69,7 @@ test("ingressToVirtualService should handle ingress without hosts", t => {
 });
 
 test("ingressToVirtualService should handle ingress without paths", t => {
-  const ingress: k8s.V1Ingress = {
+  const ingress: kind.Ingress = {
     metadata: {
       name: "test-ingress",
     },

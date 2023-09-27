@@ -3,10 +3,10 @@ import {
   serviceToVirtualService,
   extractPort,
 } from "./service-to-virtualservice"; // Replace with the actual import
-import { k8s } from "pepr"; // Replace with the actual import
+import { kind } from "pepr"; // Replace with the actual import
 
 test("extractPort should return undefined when no valid ports", t => {
-  const service: k8s.V1Service = {
+  const service: kind.Service = {
     spec: {
       ports: [{ port: 8080, protocol: "TCP" }],
     },
@@ -16,7 +16,7 @@ test("extractPort should return undefined when no valid ports", t => {
 });
 
 test("extractPort should return a single valid port", t => {
-  const service: k8s.V1Service = {
+  const service: kind.Service = {
     spec: {
       ports: [{ port: 80, protocol: "TCP" }],
     },
@@ -26,7 +26,7 @@ test("extractPort should return a single valid port", t => {
 });
 
 test("extractPort should throw an error for multiple valid ports", t => {
-  const service: k8s.V1Service = {
+  const service: kind.Service = {
     spec: {
       ports: [
         { port: 80, protocol: "TCP" },
@@ -42,7 +42,7 @@ test("extractPort should throw an error for multiple valid ports", t => {
 });
 
 test("serviceToVirtualService should return a valid VirtualService", t => {
-  const service: k8s.V1Service = {
+  const service: kind.Service = {
     metadata: {
       name: "test-service",
     },
@@ -51,15 +51,13 @@ test("serviceToVirtualService should return a valid VirtualService", t => {
     },
   };
   const vs = serviceToVirtualService(service, "gateway", "hostname");
-  vs.validate();
-
   t.is(vs.metadata.name, "test-service");
   t.is(vs.spec.gateways[0], "gateway");
   t.is(vs.spec.hosts[0], "hostname");
 });
 
 test("serviceToVirtualService should return undefined when no valid ports", t => {
-  const service: k8s.V1Service = {
+  const service: kind.Service = {
     metadata: {
       name: "test-service",
     },
@@ -72,7 +70,7 @@ test("serviceToVirtualService should return undefined when no valid ports", t =>
 });
 
 test("serviceToVirtualService should throw an error for missing metadata or spec", t => {
-  const service: k8s.V1Service = {
+  const service: kind.Service = {
     spec: {
       ports: [{ port: 80, protocol: "TCP" }],
     },

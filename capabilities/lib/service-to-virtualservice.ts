@@ -1,5 +1,5 @@
-import { k8s } from "pepr";
-import { VirtualService } from "@kubernetes-models/istio/networking.istio.io/v1beta1";
+import { kind } from "pepr";
+import { VirtualService } from "./types";
 
 export { serviceToVirtualService, extractPort };
 
@@ -9,7 +9,7 @@ export { serviceToVirtualService, extractPort };
  * This function filters the ports of the given service to only include TCP ports that are either 80 or 443.
  * It returns a single valid port number, or throws an error if more than one valid port is found.
  *
- * @param {k8s.V1Service} service - The Kubernetes Service object to extract the port from.
+ * @param {kind.Service} service - The Kubernetes Service object to extract the port from.
  * @returns {number | undefined} - Returns the valid port number if found, or `undefined` if no valid port exists.
  *
  * @throws {Error} - Throws an error if more than one valid port (TCP 80 or 443) is found in the service.
@@ -25,11 +25,10 @@ export { serviceToVirtualService, extractPort };
  * };
  * const port = extractPort(k8sService);
  */
-function extractPort(service: k8s.V1Service): number | undefined {
+function extractPort(service: kind.Service): number | undefined {
   // Filter ports to only include TCP ports 80 or 443
   const filteredPorts = service.spec.ports.filter(
-    (port: k8s.V1ServicePort) =>
-      (port.port === 80 || port.port === 443) && port.protocol === "TCP",
+    port => (port.port === 80 || port.port === 443) && port.protocol === "TCP",
   );
   if (filteredPorts.length === 0) {
     return undefined;
@@ -45,14 +44,14 @@ function extractPort(service: k8s.V1Service): number | undefined {
 /**
  * Convert a Kubernetes Service object into an Istio VirtualService object.
  *
- * This function takes a `k8s.V1Service` object and returns a corresponding Istio
+ * This function takes a `kind.Service` object and returns a corresponding Istio
  * `VirtualService` object. The generated `VirtualService` will have the same name
  * and namespace as the provided service. Additionally, the gateway and hostname are
  * specified by the caller.
  *
  * TODO: add the ownerReferneces to the VirtualService to manage the lifecycle.
  *
- * @param {k8s.V1Service} service - The Kubernetes Service object to convert.
+ * @param {kind.Service} service - The Kubernetes Service object to convert.
  * @param {string} gateway - The name of the Istio Gateway to which this VirtualService will be bound.
  * @param {string} hostname - The host that this VirtualService will manage.
  *
@@ -61,7 +60,7 @@ function extractPort(service: k8s.V1Service): number | undefined {
  * @throws {Error} Throws an error if the service does not have necessary metadata or spec.
  */
 function serviceToVirtualService(
-  service: k8s.V1Service,
+  service: kind.Service,
   gateway: string,
   hostname: string,
 ): VirtualService | undefined {
@@ -99,10 +98,8 @@ function serviceToVirtualService(
     },
   });
 
-  /* Not Guaranteed that the object is persisted yet. Watch() will fix this
-
   if (service.metadata?.uid) {
-    const ownerReference: k8s.V1OwnerReference = {
+    const ownerReference = {
       apiVersion: service.apiVersion,
       uid: service.metadata.uid,
       kind: service.kind,
@@ -110,8 +107,5 @@ function serviceToVirtualService(
     };
     virtualService.metadata.ownerReferences = [ownerReference];
   }
-  */
-
-  virtualService.validate();
   return virtualService;
 }

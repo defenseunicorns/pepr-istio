@@ -1,8 +1,8 @@
-import { k8s } from "pepr";
-import { VirtualService } from "@kubernetes-models/istio/networking.istio.io/v1beta1";
+import { kind } from "pepr";
+import { VirtualService } from "./types";
 
 export function ingressToVirtualService(
-  ingress: k8s.V1Ingress,
+  ingress: kind.Ingress,
   defaultGateway = "istio-system/tenant",
 ) {
   const gateway =
@@ -20,9 +20,8 @@ export function ingressToVirtualService(
     },
   });
 
-  /* Not Guaranteed that the object is persisted yet. Watch() will fix this
   if (ingress.metadata?.uid) {
-    const ownerReference: k8s.V1OwnerReference = {
+    const ownerReference = {
       apiVersion: ingress.apiVersion,
       uid: ingress.metadata.uid,
       kind: ingress.kind,
@@ -30,7 +29,6 @@ export function ingressToVirtualService(
     };
     virtualService.metadata.ownerReferences = [ownerReference];
   }
-  */
 
   ingress.spec.rules.forEach(rule => {
     if (rule.host) virtualService.spec.hosts.push(rule.host);
@@ -50,6 +48,5 @@ export function ingressToVirtualService(
     });
   });
 
-  virtualService.validate();
   return virtualService;
 }

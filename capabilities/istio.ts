@@ -1,7 +1,9 @@
-import { Capability, a } from "pepr";
+import { Capability, a, Log, K8s } from "pepr";
 import { ingressToVirtualService } from "./lib/ingress-to-virtualservice";
 import { serviceToVirtualService } from "./lib/service-to-virtualservice";
 import { K8sAPI } from "./lib/kubernetes-api";
+import { VirtualService } from "./lib/types";
+
 export const Istio = new Capability({
   name: "istio",
   description: "Istio service mesh capability.",
@@ -10,61 +12,58 @@ export const Istio = new Capability({
 
 const { When } = Istio;
 
+// TODO: put these in the pepr store
 // TODO: figure out where to store these defaults
 const defaultTenantGateway = "istio-system/tenant";
 const defaultDomain = "bigbang.dev";
 
-// TODO: when Watch() exists, use it instead so we know the object is persisted
-//       before we try to make it an ownerReference of the children objects
-When(a.Ingress)
-  .IsCreatedOrUpdated()
-  .Validate(async ing => {
-    if (ing.Raw.spec?.ingressClassName !== "pepr-istio") {
-      return ing.Approve();
-    }
-
-    try {
-      const k8s = new K8sAPI();
-      await k8s.labelNamespace(ing.Raw.metadata.namespace, {
-        "istio-injection": "enabled",
-      });
-
-      const vs = ingressToVirtualService(ing.Raw, defaultTenantGateway);
-      if (vs !== undefined) {
-        await k8s.upsertVirtualService(vs);
-      }
-      await k8s.restartAppsWithoutIstioSidecar(ing.Raw.metadata.namespace);
-    } catch (err) {
-      return ing.Deny(
-        `IngressToVirtualService: Failed to convert service to virtual service: ${err}`,
-      );
-    }
-    return ing.Approve();
+When(a.Namespace)
+  .IsCreated()
+  .Watch(async ns => {
+    Log.info(`Istio: Namespace ${ns.metadata.name} created`);
   });
 
+When(a.Ingress)
+  .IsCreatedOrUpdated()
+  .Watch(async ing => {
+    if (ing.spec?.ingressClassName !== "pepr-istio") {
+      return;
+    }
+
+    try {
+      await K8sAPI.labelNamespaceForIstio(ing.metadata.namespace);
+      const vs = ingressToVirtualService(ing, defaultTenantGateway);
+      if (vs !== undefined) {
+        await K8s(VirtualService).Create(vs);
+      }
+      await K8sAPI.restartAppsWithoutIstioSidecar(ing.metadata.namespace);
+    } catch (err) {
+      Log.error(
+        `IngressToVirtualService: Failed to convert service to virtual service: ${err.response}`,
+      );
+    }
+  });
+
+
+// TODO: validate this even makes sense, possibly populate stuff from the pepr store to generate this properly.
 When(a.Service)
   .IsCreatedOrUpdated()
-  .Validate(async svc => {
+  .WithLabel("pepr.dev/ingress", "true")
+  .Watch(async svc => {
     try {
-      const k8s = new K8sAPI();
-      await k8s.labelNamespace(svc.Raw.metadata.namespace, {
-        "istio-injection": "enabled",
-      });
-
+      await K8sAPI.labelNamespaceForIstio(svc.metadata.namespace);
       const vs = serviceToVirtualService(
-        svc.Raw,
+        svc,
         defaultTenantGateway,
-        `${svc.Raw.metadata.name}.${defaultDomain}`,
+        `${svc.metadata.name}.${defaultDomain}`,
       );
       if (vs !== undefined) {
-        await k8s.upsertVirtualService(vs);
+        await K8s(VirtualService).Apply(vs);
       }
-
-      await k8s.restartAppsWithoutIstioSidecar(svc.Raw.metadata.namespace);
+      await K8sAPI.restartAppsWithoutIstioSidecar(svc.metadata.namespace);
     } catch (err) {
-      return svc.Deny(
+      Log.error(
         `ServiceToVirtualService: Failed to convert service to virtual service: ${err}`,
       );
     }
-    return svc.Approve();
   });

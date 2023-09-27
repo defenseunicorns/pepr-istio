@@ -19,7 +19,7 @@
   "pepr": {
     "name": "Istio",
     "uuid": "6fe3afc1-3555-5ee3-9728-fcdfad713f6e",
-    "onError": "fail",
+    "onError": "audit",
     "alwaysIgnore": {
       "namespaces": [],
       "labels": []
@@ -31,9 +31,10 @@
     "test": "ava"
   },
   "dependencies": {
-    "@kubernetes-models/istio": "^2.3.0",
+    "@kubernetes/client-node": "^1.0.0-rc3",
     "ava": "^5.3.1",
-    "pepr": "^0.13.4",
+    "kubernetes-fluent-client": "^1.3.0",
+    "pepr": "../pepr/pepr-0.0.0-development.tgz",
     "ts-node": "^10.9.1"
   },
   "ava": {
