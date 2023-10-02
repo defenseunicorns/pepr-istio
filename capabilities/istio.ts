@@ -27,8 +27,7 @@ When(a.Ingress)
 
     try {
       await K8sAPI.labelNamespaceForIstio(ing.metadata.namespace);
-      const gateway =
-        Store.getItem("tenantGateway") || "istio-system/tenant-todo-fixme";
+      const gateway = Store.getItem("tenantGateway");
       const vs = ingressToVirtualService(ing, gateway);
       if (vs !== undefined) {
         await K8s(VirtualService).Apply(vs);

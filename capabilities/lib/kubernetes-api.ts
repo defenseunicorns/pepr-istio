@@ -1,6 +1,6 @@
-import { K8s, kind, GenericClass } from "kubernetes-fluent-client";
+import { GenericClass } from "kubernetes-fluent-client";
 import crypto from "crypto";
-import { Log } from "pepr";
+import { Log, kind, K8s } from "pepr";
 
 export class K8sAPI {
   static async labelNamespaceForIstio(namespace: string) {
@@ -14,14 +14,13 @@ export class K8sAPI {
     namespace: string,
     model: GenericClass,
   ) {
-    const app = await K8s(model).InNamespace(namespace).Get(name);
-    const checksum = crypto
-      .createHash("sha256")
-      .update(JSON.stringify(app))
-      .digest("hex");
-
     try {
-      // TODO: replace with apply after we can use partial for the fluent api
+      const app = await K8s(model).InNamespace(namespace).Get(name);
+      const checksum = crypto
+        .createHash("sha256")
+        .update(JSON.stringify(app))
+        .digest("hex");
+
       await K8s(model, { name: name, namespace: namespace }).Patch([
         {
           op: "add",
@@ -30,13 +29,15 @@ export class K8sAPI {
         },
       ]);
     } catch (err) {
-      Log.error(`Failed to checksum app: ${err.data?.message}`);
+      Log.error(
+        `Failed to apply the checksum to application: ${err.data?.message}`,
+      );
       throw err;
     }
   }
 
   /**
-   * Checks if the given pod has the Istio proxy container.
+   * Checks if the given pod needs to have an istio-proxy.
    *
    * This method determines if the specified Kubernetes pod contains a container named "istio-proxy",
    * which is indicative of the Istio sidecar being present.
@@ -45,7 +46,7 @@ export class K8sAPI {
    * @returns true if the pod needs an Istio proxy container, false otherwise.
    */
   private static needsIstioProxy(pod: kind.Pod) {
-    // TODO: check to see if it explicitly does not want istio injection
+    // TODO: Not every pod will need this, we need to know how to filter those out.
     return !pod.spec?.containers?.some(
       container => container.name === "istio-proxy",
     );
@@ -88,14 +89,13 @@ export class K8sAPI {
    * This function:
    * 1. Retrieves all pods in the given namespace.
    * 2. Iterates through the pods to identify those that do not have an Istio sidecar proxy (`istio-proxy`).
-   * 3. Determines the owner (Deployment, Daemonset or StatefulSet) of each pod without the Istio proxy.
+   * 3. Determines the owner (Deployment, DaemonSet or StatefulSet) of each pod without the Istio proxy.
    * 4. Restarts the pods based on their owning Deployment or StatefulSet:
    *    - For StatefulSets: Deletes the pods one at a time.
    *    - For Deployments/Daemonset: annotates the app with a checksum to force a restart
    *
    * Note:
    * The function avoids restarting the same app (DemonSet/Deployment) multiple times by maintaining a set of already restarted deployments.
-   * Map uses / to split the kind and name of the app (which is ok since / is not a valid character in a Kubernetes name)
    *
    * @param namespace - The Kubernetes namespace in which to operate.
    */

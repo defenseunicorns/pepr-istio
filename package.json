@@ -27,13 +27,13 @@
   },
   "scripts": {
     "build": "rm -fr dist && npx pepr build -e index.ts",
-    "k3d-setup": "k3d cluster delete pepr-dev && k3d cluster create pepr-dev --k3s-arg '--debug@server:0'",
+    "k3d-setup": "k3d cluster delete pepr-dev && k3d cluster create pepr-dev --k3s-arg '--debug@server:0' --k3s-arg '--kubelet-arg=streaming-connection-idle-timeout=10s@server:0'",
     "test": "ava"
   },
   "dependencies": {
     "@kubernetes/client-node": "^1.0.0-rc3",
     "ava": "^5.3.1",
-    "kubernetes-fluent-client": "^1.3.2",
+    "kubernetes-fluent-client": "^1.4.1",
     "pepr": "../pepr/pepr-0.0.0-development.tgz",
     "ts-node": "^10.9.1"
   },
