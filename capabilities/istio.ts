@@ -10,13 +10,13 @@ export const Istio = new Capability({
   namespaces: [],
 });
 
-const { When, Store } = Istio;
+const { When } = Istio;
 
-Store.onReady(data => {
-  Log.info(data, "Pepr Store Ready");
-  Store.setItem("tenantGateway", "istio-system/tenant");
-  Store.setItem("domain", "bigbang.dev");
-});
+// TODO: config should come from something external, not hardcoded, TODO:
+const config = {
+  tenantGateway: "istio-system/tenant",
+  domain: "bigbang.dev",
+};
 
 When(a.Ingress)
   .IsCreatedOrUpdated()
@@ -27,7 +27,7 @@ When(a.Ingress)
 
     try {
       await K8sAPI.labelNamespaceForIstio(ing.metadata.namespace);
-      const gateway = Store.getItem("tenantGateway");
+      const gateway = config["tenantGateway"];
       const vs = ingressToVirtualService(ing, gateway);
       if (vs !== undefined) {
         await K8s(VirtualService).Apply(vs);
@@ -43,7 +43,7 @@ When(a.Ingress)
     }
   });
 
-// TODO: validate this even makes sense, possibly populate stuff from the pepr store to generate this properly.
+// TODO: Validate if this service to VS makes sense.
 When(a.Service)
   .IsCreatedOrUpdated()
   .WithLabel("pepr.dev/ingress", "true")
@@ -52,8 +52,8 @@ When(a.Service)
       await K8sAPI.labelNamespaceForIstio(svc.metadata.namespace);
       const vs = serviceToVirtualService(
         svc,
-        Store.getItem("tenantGateway"),
-        `${svc.metadata.name}.${Store.getItem("domain")}`,
+        config["tenantGateway"],
+        `${svc.metadata.name}.${config["domain"]}`,
       );
       if (vs !== undefined) {
         await K8s(VirtualService).Apply(vs);
