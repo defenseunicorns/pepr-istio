@@ -34,11 +34,13 @@ When(a.Ingress)
       }
       await K8sAPI.restartAppsWithoutIstioSidecar(ing.metadata.namespace);
       Log.info(
-        `IngressToVirtualService: Successfully converted ingress to virtual service: ${ing.metadata.name}`,
+        `Successfully converted ingress to virtual service: ${ing.metadata.name}`,
+        "pepr-istio:IngressToVirtualService",
       );
     } catch (err) {
       Log.error(
-        `IngressToVirtualService: Failed to convert service to virtual service: ${err.data?.message}`,
+        `Failed to convert service to virtual service: ${err.data?.message}`,
+        "pepr-istio:IngressToVirtualService",
       );
     }
   });
@@ -59,11 +61,16 @@ When(a.Service)
         await K8s(VirtualService).Apply(vs);
       }
       await K8sAPI.restartAppsWithoutIstioSidecar(svc.metadata.namespace);
+      Log.info(
+        `Successfully converted ingress to virtual service: ${svc.metadata.name}`,
+        "pepr-istio:ServiceToVirtualService",
+      );
     } catch (err) {
       Log.error(
         `ServiceToVirtualService: Failed to convert service to virtual service: ${JSON.stringify(
           err,
         )}`,
+        "pepr-istio",
       );
     }
   });

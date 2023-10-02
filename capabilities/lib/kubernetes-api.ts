@@ -13,6 +13,7 @@ export class K8sAPI {
     name: string,
     namespace: string,
     model: GenericClass,
+    appName: string
   ) {
     try {
       const app = await K8s(model).InNamespace(namespace).Get(name);
@@ -20,19 +21,30 @@ export class K8sAPI {
         .createHash("sha256")
         .update(JSON.stringify(app))
         .digest("hex");
-
-      await K8s(model, { name: name, namespace: namespace }).Patch([
-        {
-          op: "add",
-          path: "/spec/template/metadata/annotations/pepr.dev~1checksum",
-          value: checksum,
-        },
-      ]);
+      app.spec.template.metadata.annotations = app.spec.template.metadata.annotations || {};
+      app.spec.template.metadata.annotations["pepr.dev/checksum"] = checksum;
+      app.metadata.managedFields = undefined
+      // TODO: try apply first,
+      try {
+        await K8s(model, { name: name, namespace: namespace }).Apply(app);
+      } catch (err) {
+        await K8s(model, { name: name, namespace: namespace }).Patch([
+          {
+            op: "add",
+            path: "/spec/template/metadata/annotations/pepr.dev~1checksum",
+            value: checksum,
+          },
+        ]);
+      }
+      Log.info(
+        `Failed successfully applied the checksum to ${appName}`,
+        "pepr-istio",
+      );
     } catch (err) {
       Log.error(
-        `Failed to apply the checksum to application: ${err.data?.message}`,
+        `Failed to apply the checksum to ${appName}: ${err.data?.message}`,
+        "pepr-istio",
       );
-      throw err;
     }
   }
 
@@ -68,17 +80,25 @@ export class K8sAPI {
    *          owner references of the pod.
    */
   private static async getOwnerReferences(pod: kind.Pod) {
-    let ownerReferences = pod.metadata?.ownerReferences || [];
+    const ownerReferences = pod.metadata?.ownerReferences || [];
 
     // Check to see if it's a replicaset, if so, we need to get it's parent
     const replicaSetOwner = ownerReferences.find(
       or => or.kind === "ReplicaSet",
     );
     if (replicaSetOwner?.name) {
-      const replicaSet = await K8s(kind.ReplicaSet)
-        .InNamespace(pod.metadata.namespace)
-        .Get(replicaSetOwner.name);
-      ownerReferences = replicaSet.metadata?.ownerReferences || [];
+      try {
+        const replicaSet = await K8s(kind.ReplicaSet)
+          .InNamespace(pod.metadata.namespace)
+          .Get(replicaSetOwner.name);
+        return replicaSet.metadata?.ownerReferences || [];
+      } catch {
+        Log.error(
+          `Failed to get owner references for ReplicaSet ${replicaSetOwner.name}`,
+          "pepr-istio",
+        );
+        // do not throw an error, this is called through Watch and it won't help identify the issue
+      }
     }
     return ownerReferences;
   }
@@ -101,6 +121,10 @@ export class K8sAPI {
    */
   static async restartAppsWithoutIstioSidecar(namespace: string) {
     const pods = await K8s(kind.Pod).InNamespace(namespace).Get();
+    Log.debug(
+      `Found ${pods.items.length} pods in namespace ${namespace}`,
+      "pepr-istio",
+    );
     const restartApps = new Set<string>();
     const kindMap: { [key: string]: GenericClass } = {
       Deployment: kind.Deployment,
@@ -117,9 +141,16 @@ export class K8sAPI {
               restartApps.add(app);
             }
           } else if (ownerReference.kind === "StatefulSet") {
-            await K8s(kind.Pod)
-              .InNamespace(pod.metadata.namespace)
-              .Delete(pod.metadata.name);
+            try {
+              await K8s(kind.Pod)
+                .InNamespace(pod.metadata.namespace)
+                .Delete(pod.metadata.name);
+            } catch (e) {
+              Log.error(
+                `Failed to delete pod in statefuleset ${pod.metadata.name}: ${e.data?.message}`,
+                "pepr-istio",
+              );
+            }
           }
         }
       }
@@ -127,7 +158,7 @@ export class K8sAPI {
 
     for (const app of restartApps) {
       const [thisKind, name] = app.split("/");
-      await this.checksumApp(name, namespace, kindMap[thisKind]);
+      await this.checksumApp(name, namespace, kindMap[thisKind], app);
     }
   }
 }
