@@ -107,9 +107,7 @@ export class K8sAPI {
    * 1. Retrieves all pods in the given namespace.
    * 2. Iterates through the pods to identify those that do not have an Istio sidecar proxy (`istio-proxy`).
    * 3. Determines the owner (Deployment, DaemonSet or StatefulSet) of each pod without the Istio proxy.
-   * 4. Restarts the pods based on their owning Deployment or StatefulSet:
-   *    - For StatefulSets: Deletes the pods one at a time.
-   *    - For Deployments/Daemonset: annotates the app with a checksum to force a restart
+   * 4. Restarts the pods based on their owning Deployment, StatefulSet or Daemonset (by setting a checksum)
    *
    * Note:
    * The function avoids restarting the same app (DemonSet/Deployment) multiple times by maintaining a set of already restarted deployments.
@@ -127,6 +125,7 @@ export class K8sAPI {
     const kindMap: { [key: string]: GenericClass } = {
       Deployment: kind.Deployment,
       DaemonSet: kind.DaemonSet,
+      StatefulSet: kind.StatefulSet,
     };
 
     for (const pod of restartablePods) {
@@ -134,21 +133,6 @@ export class K8sAPI {
       for (const ownerReference of ownerReferences) {
         if (kindMap[ownerReference.kind]) {
           restartApps.add(`${ownerReference.kind}/${ownerReference.name}`);
-        } else if (ownerReference.kind === "StatefulSet") {
-          try {
-            await K8s(kind.Pod)
-              .InNamespace(pod.metadata.namespace)
-              .Delete(pod.metadata.name);
-            Log.info(
-              `Successfully restarted pod in statefuleset ${pod.metadata.name}`,
-              "pepr-istio",
-            );
-          } catch (e) {
-            Log.error(
-              `Failed to delete pod in statefuleset ${pod.metadata.name}: ${e.data?.message}`,
-              "pepr-istio",
-            );
-          }
         }
       }
     }
