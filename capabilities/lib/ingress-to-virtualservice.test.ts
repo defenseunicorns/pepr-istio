@@ -2,12 +2,12 @@ import { ingressToVirtualService } from "./ingress-to-virtualservice";
 import { kind } from "pepr";
 import { expect, test } from "@jest/globals";
 
-
 test("ingressToVirtualService should create VirtualService with all fields", () => {
   const ingress: kind.Ingress = {
     metadata: {
       name: "test-ingress",
       annotations: { "pepr.dev/gateway": "custom-gateway" },
+      uid: "test-uid",
     },
     spec: {
       rules: [

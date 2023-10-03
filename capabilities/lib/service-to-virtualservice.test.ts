@@ -43,6 +43,7 @@ test("serviceToVirtualService should return a valid VirtualService", () => {
   const service: kind.Service = {
     metadata: {
       name: "test-service",
+      uid: "test-uid",
     },
     spec: {
       ports: [{ port: 80, protocol: "TCP" }],

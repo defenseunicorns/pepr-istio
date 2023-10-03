@@ -139,10 +139,10 @@ export class K8sAPI {
             await K8s(kind.Pod)
               .InNamespace(pod.metadata.namespace)
               .Delete(pod.metadata.name);
-              Log.info(
-                `Successfully restarted pod in statefuleset ${pod.metadata.name}`,
-                "pepr-istio",
-              );
+            Log.info(
+              `Successfully restarted pod in statefuleset ${pod.metadata.name}`,
+              "pepr-istio",
+            );
           } catch (e) {
             Log.error(
               `Failed to delete pod in statefuleset ${pod.metadata.name}: ${e.data?.message}`,
