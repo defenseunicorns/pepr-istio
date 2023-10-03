@@ -1,31 +1,31 @@
-import test from "ava";
 import {
   serviceToVirtualService,
   extractPort,
-} from "./service-to-virtualservice"; // Replace with the actual import
-import { kind } from "pepr"; // Replace with the actual import
+} from "./service-to-virtualservice";
+import { kind } from "pepr";
+import { expect, test } from "@jest/globals";
 
-test("extractPort should return undefined when no valid ports", t => {
+test("extractPort should return undefined when no valid ports", () => {
   const service: kind.Service = {
     spec: {
       ports: [{ port: 8080, protocol: "TCP" }],
     },
   };
   const port = extractPort(service);
-  t.is(port, undefined);
+  expect(port).toBe(undefined);
 });
 
-test("extractPort should return a single valid port", t => {
+test("extractPort should return a single valid port", () => {
   const service: kind.Service = {
     spec: {
       ports: [{ port: 80, protocol: "TCP" }],
     },
   };
   const port = extractPort(service);
-  t.is(port, 80);
+  expect(port).toBe(80);
 });
 
-test("extractPort should throw an error for multiple valid ports", t => {
+test("extractPort should throw an error for multiple valid ports", () => {
   const service: kind.Service = {
     spec: {
       ports: [
@@ -34,14 +34,12 @@ test("extractPort should throw an error for multiple valid ports", t => {
       ],
     },
   };
-  const error = t.throws(() => extractPort(service));
-  t.is(
-    error.message,
+  expect(() => extractPort(service)).toThrowError(
     "Ambiguous ports: More than one TCP port 80 or 443 is specified",
   );
 });
 
-test("serviceToVirtualService should return a valid VirtualService", t => {
+test("serviceToVirtualService should return a valid VirtualService", () => {
   const service: kind.Service = {
     metadata: {
       name: "test-service",
@@ -51,12 +49,12 @@ test("serviceToVirtualService should return a valid VirtualService", t => {
     },
   };
   const vs = serviceToVirtualService(service, "gateway", "hostname");
-  t.is(vs.metadata.name, "test-service");
-  t.is(vs.spec.gateways[0], "gateway");
-  t.is(vs.spec.hosts[0], "hostname");
+  expect(vs.metadata.name).toBe("test-service");
+  expect(vs.spec.gateways[0]).toBe("gateway");
+  expect(vs.spec.hosts[0]).toBe("hostname");
 });
 
-test("serviceToVirtualService should return undefined when no valid ports", t => {
+test("serviceToVirtualService should return undefined when no valid ports", () => {
   const service: kind.Service = {
     metadata: {
       name: "test-service",
@@ -66,17 +64,16 @@ test("serviceToVirtualService should return undefined when no valid ports", t =>
     },
   };
   const vs = serviceToVirtualService(service, "gateway", "hostname");
-  t.is(vs, undefined);
+  expect(vs).toBe(undefined);
 });
 
-test("serviceToVirtualService should throw an error for missing metadata or spec", t => {
+test("serviceToVirtualService should throw an error for missing metadata or spec", () => {
   const service: kind.Service = {
     spec: {
       ports: [{ port: 80, protocol: "TCP" }],
     },
   };
-  const error = t.throws(() =>
+  expect(() =>
     serviceToVirtualService(service, "gateway", "hostname"),
-  );
-  t.is(error.message, "Invalid V1Service provided");
+  ).toThrowError("Invalid V1Service provided");
 });

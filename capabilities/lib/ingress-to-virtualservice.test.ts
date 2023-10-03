@@ -1,8 +1,9 @@
-import test from "ava";
-import { ingressToVirtualService } from "./ingress-to-virtualservice"; // Replace with the actual import
-import { kind } from "pepr"; // Replace with the actual import
+import { ingressToVirtualService } from "./ingress-to-virtualservice";
+import { kind } from "pepr";
+import { expect, test } from "@jest/globals";
 
-test("ingressToVirtualService should create VirtualService with all fields", t => {
+
+test("ingressToVirtualService should create VirtualService with all fields", () => {
   const ingress: kind.Ingress = {
     metadata: {
       name: "test-ingress",
@@ -34,13 +35,13 @@ test("ingressToVirtualService should create VirtualService with all fields", t =
     },
   };
   const vs = ingressToVirtualService(ingress);
-  t.is(vs.metadata.name, "test-ingress");
-  t.is(vs.spec.gateways[0], "custom-gateway");
-  t.is(vs.spec.hosts[0], "example.com");
-  t.is(vs.spec.http[0].route[0].destination.host, "test-service");
+  expect(vs.metadata.name).toBe("test-ingress");
+  expect(vs.spec.gateways[0]).toBe("custom-gateway");
+  expect(vs.spec.hosts[0]).toBe("example.com");
+  expect(vs.spec.http[0].route[0].destination.host).toBe("test-service");
 });
 
-test("ingressToVirtualService should use default gateway when annotation is missing", t => {
+test("ingressToVirtualService should use default gateway when annotation is missing", () => {
   const ingress: kind.Ingress = {
     metadata: {
       name: "test-ingress",
@@ -51,10 +52,10 @@ test("ingressToVirtualService should use default gateway when annotation is miss
   };
 
   const vs = ingressToVirtualService(ingress);
-  t.is(vs.spec.gateways[0], "istio-system/tenant");
+  expect(vs.spec.gateways[0]).toBe("istio-system/tenant");
 });
 
-test("ingressToVirtualService should handle ingress without hosts", t => {
+test("ingressToVirtualService should handle ingress without hosts", () => {
   const ingress: kind.Ingress = {
     metadata: {
       name: "test-ingress",
@@ -65,10 +66,10 @@ test("ingressToVirtualService should handle ingress without hosts", t => {
   };
 
   const vs = ingressToVirtualService(ingress);
-  t.deepEqual(vs.spec.hosts, []);
+  expect(vs.spec.hosts).toEqual([]);
 });
 
-test("ingressToVirtualService should handle ingress without paths", t => {
+test("ingressToVirtualService should handle ingress without paths", () => {
   const ingress: kind.Ingress = {
     metadata: {
       name: "test-ingress",
@@ -86,5 +87,5 @@ test("ingressToVirtualService should handle ingress without paths", t => {
   };
 
   const vs = ingressToVirtualService(ingress);
-  t.deepEqual(vs.spec.http, []);
+  expect(vs.spec.http).toEqual([]);
 });

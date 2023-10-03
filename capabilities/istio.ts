@@ -2,7 +2,7 @@ import { Capability, a, Log, K8s } from "pepr";
 import { ingressToVirtualService } from "./lib/ingress-to-virtualservice";
 import { serviceToVirtualService } from "./lib/service-to-virtualservice";
 import { K8sAPI } from "./lib/kubernetes-api";
-import { VirtualService } from "./lib/types";
+import { VirtualService } from "./lib/virtualservice-type";
 
 export const Istio = new Capability({
   name: "istio",
@@ -24,7 +24,7 @@ When(a.Ingress)
     if (ing.spec?.ingressClassName !== "pepr-istio") {
       return;
     }
-
+    const logHeader = "pepr-istio:IngressToVirtualService";
     try {
       await K8sAPI.labelNamespaceForIstio(ing.metadata.namespace);
       const gateway = config["tenantGateway"];
@@ -35,12 +35,12 @@ When(a.Ingress)
       await K8sAPI.restartAppsWithoutIstioSidecar(ing.metadata.namespace);
       Log.info(
         `Successfully converted ingress to virtual service: ${ing.metadata.name}`,
-        "pepr-istio:IngressToVirtualService",
+        logHeader,
       );
     } catch (err) {
       Log.error(
         `Failed to convert service to virtual service: ${err.data?.message}`,
-        "pepr-istio:IngressToVirtualService",
+        logHeader,
       );
     }
   });
@@ -50,6 +50,8 @@ When(a.Service)
   .IsCreatedOrUpdated()
   .WithLabel("pepr.dev/ingress", "true")
   .Watch(async svc => {
+    const logHeader = "pepr-istio:ServiceToVirtualService";
+
     try {
       await K8sAPI.labelNamespaceForIstio(svc.metadata.namespace);
       const vs = serviceToVirtualService(
@@ -63,14 +65,12 @@ When(a.Service)
       await K8sAPI.restartAppsWithoutIstioSidecar(svc.metadata.namespace);
       Log.info(
         `Successfully converted ingress to virtual service: ${svc.metadata.name}`,
-        "pepr-istio:ServiceToVirtualService",
+        logHeader,
       );
     } catch (err) {
       Log.error(
-        `ServiceToVirtualService: Failed to convert service to virtual service: ${JSON.stringify(
-          err,
-        )}`,
-        "pepr-istio",
+        `Failed to convert service to virtual service: ${err.data?.message}`,
+        logHeader,
       );
     }
   });

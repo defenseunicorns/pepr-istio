@@ -1,5 +1,5 @@
 import { kind } from "pepr";
-import { VirtualService } from "./types";
+import { VirtualService } from "./virtualservice-type";
 
 export { serviceToVirtualService, extractPort };
 

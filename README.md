@@ -17,7 +17,7 @@ This is a Pepr Module to implement the modifications to an application to inject
 <br>
 
 ### The minimum requirements for this module are:
-1. Istio must be deployed (This has been primarily tested with 1.17.2)
+1. Istio must be deployed (This has been primarily tested with 1.19)
 2. Kubernetes 1.19+ (for changes to the ingress API)
 3. an object to drive this capability: (ingress or a service)
 
@@ -55,6 +55,9 @@ metadata:
   # TBD: how to configure the domain (default in the istio.ts)
   name: myapp
   namespace: myapp
+  labels:
+    pepr.dev/ingress: true
+
 spec:
   selector:
     app: myapp
@@ -77,6 +80,7 @@ Module Root
     ├── istio.ts
     └── lib
         ├── ingress-to-virtualservice.ts
+        ├── virtualservice-type.ts
         ├── kubernetes-api.ts
         └── service-to-virtualservice.ts
 ```

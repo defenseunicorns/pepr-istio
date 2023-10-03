@@ -13,7 +13,7 @@ export class K8sAPI {
     name: string,
     namespace: string,
     model: GenericClass,
-    appName: string
+    appName: string,
   ) {
     try {
       const app = await K8s(model).InNamespace(namespace).Get(name);
@@ -21,10 +21,11 @@ export class K8sAPI {
         .createHash("sha256")
         .update(JSON.stringify(app))
         .digest("hex");
-      app.spec.template.metadata.annotations = app.spec.template.metadata.annotations || {};
+      app.spec.template.metadata.annotations =
+        app.spec.template.metadata.annotations || {};
       app.spec.template.metadata.annotations["pepr.dev/checksum"] = checksum;
-      app.metadata.managedFields = undefined
-      // TODO: try apply first,
+      app.metadata.managedFields = undefined;
+      // TODO: try apply first, if it fails, patch. When the fluentAPI supports force apply, we can simplify this
       try {
         await K8s(model, { name: name, namespace: namespace }).Apply(app);
       } catch (err) {
@@ -36,10 +37,7 @@ export class K8sAPI {
           },
         ]);
       }
-      Log.info(
-        `Failed successfully applied the checksum to ${appName}`,
-        "pepr-istio",
-      );
+      Log.info(`Successfully applied the checksum to ${appName}`, "pepr-istio");
     } catch (err) {
       Log.error(
         `Failed to apply the checksum to ${appName}: ${err.data?.message}`,
@@ -97,7 +95,6 @@ export class K8sAPI {
           `Failed to get owner references for ReplicaSet ${replicaSetOwner.name}`,
           "pepr-istio",
         );
-        // do not throw an error, this is called through Watch and it won't help identify the issue
       }
     }
     return ownerReferences;
@@ -120,9 +117,10 @@ export class K8sAPI {
    * @param namespace - The Kubernetes namespace in which to operate.
    */
   static async restartAppsWithoutIstioSidecar(namespace: string) {
-    const pods = await K8s(kind.Pod).InNamespace(namespace).Get();
-    Log.debug(
-      `Found ${pods.items.length} pods in namespace ${namespace}`,
+    const allPods = await K8s(kind.Pod).InNamespace(namespace).Get();
+    const restartablePods = allPods.items.filter(this.needsIstioProxy);
+    Log.info(
+      `In ${namespace} namespace, found ${restartablePods.length}/${allPods.items.length} pods without an istio-proxy sidecar`,
       "pepr-istio",
     );
     const restartApps = new Set<string>();
@@ -131,26 +129,25 @@ export class K8sAPI {
       DaemonSet: kind.DaemonSet,
     };
 
-    for (const pod of pods.items) {
-      if (this.needsIstioProxy(pod)) {
-        const ownerReferences = await this.getOwnerReferences(pod);
-        for (const ownerReference of ownerReferences) {
-          if (kindMap[ownerReference.kind]) {
-            const app = `${ownerReference.kind}/${ownerReference.name}`;
-            if (!restartApps.has(app)) {
-              restartApps.add(app);
-            }
-          } else if (ownerReference.kind === "StatefulSet") {
-            try {
-              await K8s(kind.Pod)
-                .InNamespace(pod.metadata.namespace)
-                .Delete(pod.metadata.name);
-            } catch (e) {
-              Log.error(
-                `Failed to delete pod in statefuleset ${pod.metadata.name}: ${e.data?.message}`,
+    for (const pod of restartablePods) {
+      const ownerReferences = await this.getOwnerReferences(pod);
+      for (const ownerReference of ownerReferences) {
+        if (kindMap[ownerReference.kind]) {
+          restartApps.add(`${ownerReference.kind}/${ownerReference.name}`);
+        } else if (ownerReference.kind === "StatefulSet") {
+          try {
+            await K8s(kind.Pod)
+              .InNamespace(pod.metadata.namespace)
+              .Delete(pod.metadata.name);
+              Log.info(
+                `Successfully restarted pod in statefuleset ${pod.metadata.name}`,
                 "pepr-istio",
               );
-            }
+          } catch (e) {
+            Log.error(
+              `Failed to delete pod in statefuleset ${pod.metadata.name}: ${e.data?.message}`,
+              "pepr-istio",
+            );
           }
         }
       }
