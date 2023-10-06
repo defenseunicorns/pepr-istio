@@ -54,8 +54,11 @@ When(a.Service)
 
     try {
       await K8sAPI.labelNamespaceForIstio(svc.metadata.namespace);
+
+      const portToExpose = await K8sAPI.findPodContainerPort(svc);
       const vs = serviceToVirtualService(
         svc,
+        portToExpose,
         config["tenantGateway"],
         `${svc.metadata.name}.${config["domain"]}`,
       );

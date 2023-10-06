@@ -9,6 +9,29 @@ export class K8sAPI {
     });
   }
 
+  /**
+   * checksumApp - A static asynchronous method that calculates and applies a checksum to a Kubernetes resource which
+   *               will cause the pods to be recreated/restart.
+   *
+   * This method:
+   * 1. Fetches the specified Kubernetes resource using the provided name, namespace, and model.
+   * 2. Calculates a SHA-256 checksum of the fetched resource.
+   * 3. Applies this checksum as an annotation to the resource's pod template metadata.
+   * 4. Attempts to update the resource using the "apply" method.
+   *    a. If the "apply" method fails, it resorts to a "patch" method to add the checksum annotation.
+   * 5. Logs the success or failure of the checksum application.
+   *
+   * This checksum can be utilized to detect changes in the resource configuration, prompting possible
+   * updates or actions in related Kubernetes components or tools.
+   *
+   * @param {string} name - The name of the Kubernetes resource.
+   * @param {string} namespace - The namespace in which the resource resides.
+   * @param {GenericClass} model - The Kubernetes model/class of the resource.
+   * @param {string} appName - The human-friendly name of the app/resource for logging purposes.
+   *
+   *
+   * @todo Consider replacing the try-catch for "apply" with a force apply when the fluentAPI supports it.
+   */
   static async checksumApp(
     name: string,
     namespace: string,
@@ -141,5 +164,38 @@ export class K8sAPI {
       const [thisKind, name] = app.split("/");
       await this.checksumApp(name, namespace, kindMap[thisKind], app);
     }
+  }
+
+  /**
+   * findPodContainerPort - A static asynchronous method that attempts to determine the container port
+   * of a pod based on a given Kubernetes service.
+   *
+   * Given a Kubernetes service, this method:
+   * 1. Queries for all pods in the namespace of the service that match the service's label selector.
+   * 2. Iterates through each pod and its containers.
+   * 3. Attempts to find the port within a container whose name matches the target port of the service.
+   * 4. If such a port is found, it returns the container port.
+   * 5. If no matching port is found after checking all pods and their containers, it returns undefined.
+   *
+   * @param {kind.Service} service - The Kubernetes service based on which the container port needs to be determined.
+   *
+   * @returns {number | undefined} - The found container port or undefined if no matching port is found.
+   */
+  static async findPodContainerPort(service: kind.Service) {
+    const pods = await K8s(kind.Pod, { labels: service.spec.selector })
+      .InNamespace(service.metadata.namespace)
+      .Get();
+
+    for (const pod of pods.items) {
+      for (const container of pod.spec?.containers || []) {
+        const port = container.ports?.find(
+          port => port.name === service.spec?.ports[0].targetPort?.toString(),
+        );
+        if (port) {
+          return port.containerPort;
+        }
+      }
+    }
+    return undefined;
   }
 }
