@@ -26,16 +26,17 @@
     }
   },
   "scripts": {
-    "build": "rm -fr dist && pepr build -e index.ts",
+    "build": "rm -fr dist && npx pepr build -e index.ts",
     "k3d-setup": "k3d cluster delete pepr-dev && k3d cluster create pepr-dev --k3s-arg '--debug@server:0'",
-    "test": "echo \"Test entrypoint goes here\""
-  },
-  "dependencies": {
-    "@kubernetes-models/istio": "^2.3.0",
-    "@kubernetes/client-node": "^0.19.0",
-    "pepr": "^0.12.1"
+    "test": "jest --coverage"
   },
   "devDependencies": {
-    "typescript": "5.0.4"
+    "jest": "29.7.0",
+    "ts-jest": "29.1.1",
+    "@jest/globals": "29.7.0"
+  },
+  "dependencies": {
+    "kubernetes-fluent-client": "^1.4.1",
+    "pepr": "^0.14.0"
   }
 }
