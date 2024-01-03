@@ -36,7 +36,7 @@
     "@jest/globals": "29.7.0"
   },
   "dependencies": {
-    "kubernetes-fluent-client": "^1.4.1",
+    "kubernetes-fluent-client": "^2.1.0",
     "pepr": "^0.14.0"
   }
 }
