@@ -37,6 +37,6 @@
   },
   "dependencies": {
     "kubernetes-fluent-client": "^1.4.1",
-    "pepr": "^0.14.0"
+    "pepr": "^0.21.1"
   }
 }
